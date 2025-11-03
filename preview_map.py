@@ -6,7 +6,7 @@ zones = gpd.read_file("taxi_zones_wgs84.geojson")  # à changer s'il a été dé
 geojson = json.loads(zones.to_json())
 
 # 2) agrégat rapide sur tes yellow trips
-df = pd.read_parquet("yellow_tripdata_2025-01.parquet", columns=["PULocationID"])
+df = pd.read_parquet("data/yellow_tripdata_2025-01.parquet", columns=["PULocationID"])
 agg = df.value_counts("PULocationID").rename("n_trips").reset_index()
 agg = agg.rename(columns={"PULocationID": "LocationID"})
 
