@@ -1,0 +1,14 @@
+# Forcer LF pour les fichiers texte cross-platform
+*.py      text eol=lf
+*.json    text eol=lf
+*.geojson text eol=lf
+*.csv     text eol=lf
+*.md      text eol=lf
+*.ipynb   text eol=lf
+
+# Binaires (pas de conversion)
+*.parquet binary
+*.shp     binary
+*.shx     binary
+*.dbf     binary
+*.zip     binary
