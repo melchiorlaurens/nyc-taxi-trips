@@ -1,24 +1,31 @@
 from pathlib import Path
-import argparse
 import geopandas as gpd
 from pyproj import CRS
 
-source = Path(import_nyc_zones.py).parent
+
+
+# ★ 1) Dossier réel du script (fiable même lancé depuis ailleurs)
+source = Path(__file__).resolve().parent
+
 # Chemin vers le dossier DÉJÀ DÉZIPPE contenant .shp/.shx/.dbf/.prj
-#   (ou directement le chemin du fichier .shp)
-SRC_PATH = source / "projet_data" / "taxi_zones"
+SRC_PATH = source / "taxi_zones"
 # Chemin de sortie du GeoJSON (WGS84)
-OUT_PATH = source / "projet_data" / "taxi_zones_wgs84.geojson"
+OUT_PATH = source / "taxi_zones_wgs84.geojson"
+
 
 def find_shp(src: Path) -> Path:
     """Retourne le chemin du .shp à partir d'un dossier ou d'un .shp direct."""
     if src.is_file() and src.suffix.lower() == ".shp":
         return src
     if src.is_dir():
-        shp = next(src.glob("*.shp"), None)
+        # ★ 2) cherche d'abord à la racine, puis récursivement
+        shp = next(src.glob("*.shp"), None) or next(src.rglob("*.shp"), None)
         if shp:
             return shp
-    raise FileNotFoundError(f"Aucun .shp trouvé. Donne un dossier contenant un .shp ou un chemin .shp.\nSRC_PATH actuel: {src}")
+    raise FileNotFoundError(
+        f"Aucun .shp trouvé. Donne un dossier contenant un .shp ou un chemin .shp.\n"
+        f"SRC_PATH actuel: {src}\n"
+    )
 
 
 def read_with_crs(shp_path: Path) -> gpd.GeoDataFrame:
@@ -40,7 +47,14 @@ def read_with_crs(shp_path: Path) -> gpd.GeoDataFrame:
     )
 
 def main():
+
+    # Aide debug rapide
+    print("Script dir :", source)
+    print("SRC_PATH   :", SRC_PATH.resolve())
+
     shp = find_shp(SRC_PATH)
+    print("Shapefile trouvé :", shp)
+
     gdf = read_with_crs(shp)
 
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
