@@ -31,14 +31,31 @@ def make_hist_figure(df: pd.DataFrame, col: str, bins: int):
     if col not in df.columns:
         return px.histogram()
 
+    # 1) nettoyer
     s = pd.to_numeric(df[col], errors="coerce").replace([np.inf, -np.inf], np.nan).dropna()
-    s = s[s > 0].astype(float)  # log => > 0
+    s = s[s > 0].astype(float)
     if s.empty:
         return px.histogram()
 
-    d = pd.DataFrame({"value": s.values})
-    fig = px.histogram(d, x="value", nbins=int(bins), labels={"value": col})
-    fig.update_xaxes(type="log", title=col)
+    # 2) passer en log10 pour un binning stable
+    s_log = np.log10(s.values)
+
+    # 3) tracer en linéaire sur s_log
+    d = pd.DataFrame({"log10_value": s_log})
+    fig = px.histogram(d, x="log10_value", nbins=int(bins))
+
+    # 4) replacer des ticks lisibles (10^k)
+    kmin = int(np.floor(s_log.min()))
+    kmax = int(np.ceil(s_log.max()))
+    tickvals = list(range(kmin, kmax + 1))
+    ticktext = [f"10^{k}" if k != 0 else "1" for k in tickvals]
+
+    fig.update_xaxes(
+        title=col,
+        tickmode="array",
+        tickvals=tickvals,
+        ticktext=ticktext
+    )
     fig.update_yaxes(title="count")
     fig.update_layout(
         margin=dict(l=0, r=0, t=40, b=0),
