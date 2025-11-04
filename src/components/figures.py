@@ -30,14 +30,12 @@ def make_map_figure(
 def make_hist_figure(df: pd.DataFrame, col: str, bins: int):
     if col not in df.columns:
         return px.histogram()
+
     s = pd.to_numeric(df[col], errors="coerce").replace([np.inf, -np.inf], np.nan).dropna()
-    s = s[s > 0].astype(float)  # log => positif
+    s = s[s > 0].astype(float)  # log => > 0
     if s.empty:
         return px.histogram()
-    # clip doux pour lisibilité (P99)
-    xmax = float(s.quantile(0.99))
-    if xmax > 0:
-        s = s.clip(upper=xmax)
+
     d = pd.DataFrame({"value": s.values})
     fig = px.histogram(d, x="value", nbins=int(bins), labels={"value": col})
     fig.update_xaxes(type="log", title=col)
@@ -45,6 +43,6 @@ def make_hist_figure(df: pd.DataFrame, col: str, bins: int):
     fig.update_layout(
         margin=dict(l=0, r=0, t=40, b=0),
         bargap=0.02,
-        title=f"Histogramme — {col} (log, ≤P99, n={len(s):,})".replace(",", " "),
+        title=f"Histogramme — {col} (échelle log, n={len(s):,})".replace(",", " ")
     )
     return fig
