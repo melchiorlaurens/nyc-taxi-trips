@@ -1,43 +1,47 @@
 # main.py — Tout-en-un minimal : prépare (si besoin) + lance la carte & l'histogramme
-from pathlib import Path
 import pandas as pd
 import geopandas as gpd
 from dash import Dash, dcc, html, Input, Output
 import plotly.express as px
 
 from src.utils.get_data import download_month, download_assets
-from src.utils.clean_data import make_geojson, make_yellow_clean
+from src.utils.clean_data import make_geojson, make_yellow_clean, make_zone_lookup
 from src.components.figures import make_map_figure, make_hist_figure
+from src.utils.paths import (
+    RAW_DATA_DIR,
+    CLEAN_DATA_DIR,
+    DEFAULT_YEAR,
+    DEFAULT_MONTH,
+    CLEAN_TAXI_ZONES_GEOJSON,
+    CLEAN_YELLOW_PARQUET,
+    CLEAN_TAXI_ZONE_LOOKUP_CSV,
+)
 
 # ---------------- Config ----------------
-ROOT = Path(__file__).resolve().parent
-RAW = ROOT / "data" / "raw"
-CLEAN = ROOT / "data" / "cleaned"
-
-DEFAULT_YEAR = 2025
-DEFAULT_MONTH = 1
-
-CLEAN_GEOJSON = CLEAN / "taxi_zones_wgs84.geojson"
-CLEAN_YELLOW = CLEAN / "yellow_clean.parquet"
 # ---------------------------------------
 
 def ensure_clean():
     """Télécharge si besoin les bruts et génère les fichiers cleaned attendus par le dashboard."""
-    if CLEAN_GEOJSON.exists() and CLEAN_YELLOW.exists():
+    if (
+        CLEAN_TAXI_ZONES_GEOJSON.exists()
+        and CLEAN_YELLOW_PARQUET.exists()
+        and CLEAN_TAXI_ZONE_LOOKUP_CSV.exists()
+    ):
         print("[info] Données prêtes en data/cleaned.")
         return
     print("[info] Préparation des données…")
-    RAW.mkdir(parents=True, exist_ok=True)
-    download_month(DEFAULT_YEAR, DEFAULT_MONTH, RAW)
-    download_assets(RAW)
-    CLEAN.mkdir(parents=True, exist_ok=True)
-    make_geojson(RAW, CLEAN)
-    make_yellow_clean(RAW, CLEAN)
+    RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    download_month(DEFAULT_YEAR, DEFAULT_MONTH)
+    download_assets()
+    CLEAN_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    make_geojson(RAW_DATA_DIR, CLEAN_DATA_DIR)
+    make_yellow_clean(RAW_DATA_DIR, CLEAN_DATA_DIR)
+    make_zone_lookup(RAW_DATA_DIR, CLEAN_DATA_DIR)
     print("[info] Données prêtes.")
 
 def build_app():
-    zones_gdf = gpd.read_file(CLEAN_GEOJSON)
-    df = pd.read_parquet(CLEAN_YELLOW)
+    zones_gdf = gpd.read_file(CLEAN_TAXI_ZONES_GEOJSON)
+    df = pd.read_parquet(CLEAN_YELLOW_PARQUET)
 
     boroughs = sorted(zones_gdf["borough"].dropna().unique())
     numeric_hist_cols = [c for c in ["trip_distance", "fare_amount", "tip_amount"] if c in df.columns]
