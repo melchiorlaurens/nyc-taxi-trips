@@ -92,19 +92,16 @@ def build_app():
 
         # Histogramme
         html.Div([
-            html.Label("Histogramme — variable (échelle log)"),
+            html.Label("Veuillez choisir la variable à afficher sur l'histogramme : distance (en miles), le montant ($), ou le pourboire ($)"),
             dcc.Dropdown(
                 id="hist-col",
                 options=[{"label": c, "value": c} for c in numeric_hist_cols] or [{"label":"(aucune)","value":"_none"}],
                 value=("trip_distance" if "trip_distance" in numeric_hist_cols else (numeric_hist_cols[0] if numeric_hist_cols else "_none")),
                 clearable=False,
                 style={"width":"320px"}
-            ),
-            html.Div(dcc.Slider(id="bins", min=10, max=120, step=5, value=40,
-                                marks=None, tooltip={"placement":"bottom","always_visible":True}),
-                     style={"width":"320px","marginTop":"8px"}),
-        ], style={"marginTop":"6px"}),
-        dcc.Graph(id="hist", style={"height":"42vh"}),
+            )
+        ]),
+        dcc.Graph(id="hist", style={"height":"100vh"})
     ])
 
     # Callbacks
@@ -121,9 +118,9 @@ def build_app():
         return make_map_figure(zones_gdf, aggs_cache.get(metric, aggs_cache["count"]), borough_filter, label)
 
     @app.callback(Output("hist","figure"),
-                  Input("hist-col","value"), Input("bins","value"))
-    def _hist(col, bins):
-        return make_hist_figure(df, col, int(bins))
+                  Input("hist-col","value"))
+    def _hist(col):
+        return make_hist_figure(df, col)
 
     return app
 
