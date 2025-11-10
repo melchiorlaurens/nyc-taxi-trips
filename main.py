@@ -1,5 +1,7 @@
 # main.py — Tout-en-un minimal : prépare (si besoin) + lance la carte & l'histogramme
 import pandas as pd
+import numpy as np
+from functools import lru_cache
 import geopandas as gpd
 from dash import Dash, dcc, html, Input, Output, State
 import plotly.express as px
@@ -50,10 +52,9 @@ def ensure_clean():
                 needs_yellow = True
                 break
     if needs_yellow:
-        print("[info] (Re)nettoyage des parquets mensuels…")
+        print("[info] Nettoyage des fichiers parquets mensuels…")
         make_yellow_clean(RAW_DATA_DIR, CLEAN_DATA_DIR)
-    else:
-        print("[info] Données nettoyées déjà à jour.")
+    print("[info] Données nettoyées et prêtes à être utilisées.")
 
 
 def build_app():
@@ -79,11 +80,65 @@ def build_app():
 
     boroughs = sorted(zones_gdf["borough"].dropna().unique())
 
+    # Pré-calcul des bornes globales (x_min/x_max) et du y_max pour l'histogramme par variable
+    hist_bounds = {}
+    NBINS = 40
+
+    def _clean_series(df_in: pd.DataFrame, col_in: str) -> pd.Series:
+        s = pd.to_numeric(df_in.get(col_in), errors="coerce")
+        if s is None:
+            return pd.Series(dtype=float)
+        s = s.replace([np.inf, -np.inf], np.nan).dropna()
+        s = s[s > 0].astype(float)
+        return s
+
+    @lru_cache(maxsize=24)
+    def _load_month_df(ym_str: str) -> pd.DataFrame:
+        try:
+            y, m = map(int, ym_str.split('-'))
+            return pd.read_parquet(clean_yellow_parquet_path(y, m))
+        except Exception:
+            return pd.DataFrame()
+
+    for col in numeric_hist_cols:
+        gmin = None
+        gmax = None
+        # Première passe: bornes x
+        for ym in months:
+            dfm = _load_month_df(ym)
+            if col not in dfm.columns:
+                continue
+            s = _clean_series(dfm, col)
+            if s.empty:
+                continue
+            vmin = float(s.min())
+            vmax = float(s.max())
+            gmin = vmin if gmin is None else min(gmin, vmin)
+            gmax = vmax if gmax is None else max(gmax, vmax)
+        if gmin is None or gmax is None or gmin <= 0:
+            continue
+        xmin_dec = int(np.floor(np.log10(gmin)))
+        xmax_dec = int(np.ceil(np.log10(gmax)))
+        edges = np.logspace(xmin_dec, xmax_dec, NBINS + 1)
+        # Deuxième passe: y_max avec ces edges
+        ymax = 0
+        for ym in months:
+            dfm = _load_month_df(ym)
+            if col not in dfm.columns:
+                continue
+            s = _clean_series(dfm, col)
+            if s.empty:
+                continue
+            counts, _ = np.histogram(s.values, bins=edges)
+            if counts.size:
+                ymax = max(ymax, int(counts.max()))
+        hist_bounds[col] = dict(x_min=float(10 ** xmin_dec), x_max=float(10 ** xmax_dec), y_max=float(ymax))
+
     app = Dash(__name__)
     app.title = "Dashboard NYC Yellow Taxi"
 
     app.layout = html.Div(style={"fontFamily":"Inter, system-ui", "padding":"8px 12px"}, children=[
-        html.H1("NYC Yellow Taxi — Dashboard (minimal)", style={"margin":"8px 0 4px"}),
+        html.H1("Dashboard : NYC Yellow Taxi", style={"margin":"8px 0 4px"}),
         html.Div("Exécution : python main.py — données locales en cache (data/cleaned)"),
         html.Hr(),
 
@@ -109,13 +164,8 @@ def build_app():
                     updatemode="drag",
                 ),
                 html.Div(id="info", style={"marginTop":"6px", "color":"#6b7280"}),
-                html.Div([
-                    html.Button("Play", id="play", n_clicks=0, style={"marginRight":"6px"}),
-                    html.Button("Pause", id="pause", n_clicks=0),
-                    dcc.Interval(id="timer", interval=4000, n_intervals=0, disabled=True),      # intervalle à 4s car long à charger
-                ], style={"marginTop":"6px"}),
-            ], style={"marginBottom":"8px"}),
-
+            ]
+            ),
             html.Div([
                 html.Label("Métrique (carte)"),
                 dcc.Dropdown(id="metric", value="count", clearable=False, style={"width":"320px"},
@@ -158,10 +208,8 @@ def build_app():
             "tip_amount":"Pourboire moyen ($)",
         }.get(metric, "Valeur")
         current_month = months[month_idx] if 0 <= month_idx < len(months) else months[-1]
-        try:
-            y, m = map(int, current_month.split('-'))
-            df_month = pd.read_parquet(clean_yellow_parquet_path(y, m))
-        except Exception:
+        df_month = _load_month_df(current_month)
+        if df_month.empty:
             df_month = pd.DataFrame(columns=["PULocationID"])  # vide
         if metric == "count":
             agg_month = df_month.value_counts("PULocationID").rename("value").reset_index()
@@ -177,42 +225,23 @@ def build_app():
                   Input("month-index","value"))
     def _hist(col, month_idx):
         current_month = months[month_idx] if 0 <= month_idx < len(months) else months[-1]
-        try:
-            y, m = map(int, current_month.split('-'))
-            df_month = pd.read_parquet(clean_yellow_parquet_path(y, m))
-        except Exception:
+        df_month = _load_month_df(current_month)
+        if df_month.empty:
             df_month = pd.DataFrame(columns=[col])
-        fig = make_hist_figure(df_month, col)
+        bounds = hist_bounds.get(col)
+        if bounds:
+            fig = make_hist_figure(df_month, col, x_min=bounds["x_min"], x_max=bounds["x_max"], y_max=bounds["y_max"])
+        else:
+            fig = make_hist_figure(df_month, col)
         fig.update_layout(title=(fig.layout.title.text or "Histogramme") + f" — {current_month}")
         return fig
-
-    # Lecture automatique du slider
-    @app.callback(Output("timer", "disabled"),
-                  Input("play", "n_clicks"),
-                  Input("pause", "n_clicks"))
-    def _toggle_timer(n_play, n_pause):
-        n_play = n_play or 0
-        n_pause = n_pause or 0
-        return not (n_play > n_pause)
-
-    @app.callback(Output("month-index", "value"),
-                  Input("timer", "n_intervals"),
-                  State("month-index", "value"))
-    def _advance_slider(_n, idx):
-        if not months:
-            return 0
-        return (idx + 1) % len(months)
 
     @app.callback(Output("info", "children"),
                   Input("month-index", "value"))
     def _info_msg(month_idx):
         current_month = months[month_idx] if 0 <= month_idx < len(months) else months[-1]
-        try:
-            y, m = map(int, current_month.split('-'))
-            p = clean_yellow_parquet_path(y, m)
-            if not p.exists() or pd.read_parquet(p).empty:
-                return f"Aucune donnée disponible pour {current_month}."
-        except Exception:
+        dfm = _load_month_df(current_month)
+        if dfm.empty:
             return f"Aucune donnée disponible pour {current_month}."
         return ""
 
