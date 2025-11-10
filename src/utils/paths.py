@@ -14,10 +14,13 @@ RAW_TAXI_ZONE_LOOKUP_CSV = RAW_DATA_DIR / "taxi_zone_lookup.csv"
 # Defaults for downloads / processing
 DEFAULT_YEAR = 2025
 DEFAULT_MONTH = 1
+# Explicit list of (year, month) periods used by downloads and UI filtering.
+# Supports cross-year ranges like [(2024, 12), (2025, 1)].
+# Default mirrors Jan–Mar 2025; adjust as needed.
+DEFAULT_PERIODS = [(DEFAULT_YEAR, 1), (DEFAULT_YEAR, 2), (DEFAULT_YEAR, 3)]
 
 # Standard output locations
 CLEAN_TAXI_ZONES_GEOJSON = CLEAN_DATA_DIR / "taxi_zones_wgs84.geojson"
-CLEAN_YELLOW_PARQUET = CLEAN_DATA_DIR / "yellow_clean.parquet"
 RAW_TAXI_ZONES_ZIP = RAW_DATA_DIR / "taxi_zones.zip"
 CLEAN_TAXI_ZONE_LOOKUP_CSV = CLEAN_DATA_DIR / "taxi_zone_lookup.csv"
 
@@ -25,3 +28,10 @@ CLEAN_TAXI_ZONE_LOOKUP_CSV = CLEAN_DATA_DIR / "taxi_zone_lookup.csv"
 def yellow_tripdata_path(year: int, month: int) -> Path:
     """Return the expected parquet path for a given yellow tripdata month."""
     return RAW_DATA_DIR / f"yellow_tripdata_{year}-{month:02d}.parquet"
+
+# Directory for monthly cleaned tripdata
+CLEAN_YELLOW_MONTHLY_DIR = CLEAN_DATA_DIR / "yellow_monthly"
+
+def clean_yellow_parquet_path(year: int, month: int) -> Path:
+    """Return the path for a monthly cleaned parquet (per month)."""
+    return CLEAN_YELLOW_MONTHLY_DIR / f"yellow_clean_{year}-{month:02d}.parquet"

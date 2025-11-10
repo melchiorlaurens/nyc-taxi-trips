@@ -7,8 +7,6 @@ import zipfile
 import requests
 
 from src.utils.paths import (
-    DEFAULT_YEAR,
-    DEFAULT_MONTH,
     RAW_TAXI_ZONES_ZIP,
     TAXI_ZONES_DIR,
     RAW_TAXI_ZONE_LOOKUP_CSV,
@@ -49,13 +47,7 @@ def download_months(periods: Iterable[Tuple[int, int]]) -> List[Path]:
         dest = yellow_tripdata_path(year, month)
         destinations.append(_download_file(url, dest))
     return destinations
-
-
-def download_month(year: int | None = None, month: int | None = None) -> Path:
-    """Download a single yellow taxi month; defaults to DEFAULT_YEAR/MONTH."""
-    target_year = year if year is not None else DEFAULT_YEAR
-    target_month = month if month is not None else DEFAULT_MONTH
-    return download_months([(target_year, target_month)])[0]
+# Note: callers should pass explicit periods, e.g. DEFAULT_PERIODS
 
 
 def download_assets() -> Path:

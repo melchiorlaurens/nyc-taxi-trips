@@ -1,65 +1,86 @@
 # main.py — Tout-en-un minimal : prépare (si besoin) + lance la carte & l'histogramme
 import pandas as pd
 import geopandas as gpd
-from dash import Dash, dcc, html, Input, Output
+from dash import Dash, dcc, html, Input, Output, State
 import plotly.express as px
 
-from src.utils.get_data import download_month, download_assets
+from src.utils.get_data import download_months, download_assets
 from src.utils.clean_data import make_geojson, make_yellow_clean, make_zone_lookup
 from src.components.figures import make_map_figure, make_hist_figure
 from src.utils.paths import (
     RAW_DATA_DIR,
     CLEAN_DATA_DIR,
-    DEFAULT_YEAR,
-    DEFAULT_MONTH,
+    DEFAULT_PERIODS,
     CLEAN_TAXI_ZONES_GEOJSON,
-    CLEAN_YELLOW_PARQUET,
     CLEAN_TAXI_ZONE_LOOKUP_CSV,
+    CLEAN_YELLOW_MONTHLY_DIR,
+    clean_yellow_parquet_path,
 )
 
 # ---------------- Config ----------------
 # ---------------------------------------
 
 def ensure_clean():
-    """Télécharge si besoin les bruts et génère les fichiers cleaned attendus par le dashboard."""
-    if (
-        CLEAN_TAXI_ZONES_GEOJSON.exists()
-        and CLEAN_YELLOW_PARQUET.exists()
-        and CLEAN_TAXI_ZONE_LOOKUP_CSV.exists()
-    ):
-        print("[info] Données prêtes en data/cleaned.")
-        return
-    print("[info] Préparation des données…")
+    """Prépare les données si besoin et génère les fichiers cleaned attendus par le dashboard."""
     RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
-    download_month(DEFAULT_YEAR, DEFAULT_MONTH)
+    # Télécharge selon la config (si manquants)
+    download_months(DEFAULT_PERIODS)
     download_assets()
+
     CLEAN_DATA_DIR.mkdir(parents=True, exist_ok=True)
-    make_geojson(RAW_DATA_DIR, CLEAN_DATA_DIR)
-    make_yellow_clean(RAW_DATA_DIR, CLEAN_DATA_DIR)
-    make_zone_lookup(RAW_DATA_DIR, CLEAN_DATA_DIR)
-    print("[info] Données prêtes.")
+
+    # Shapefile/lookup: générer si manquants
+    if not CLEAN_TAXI_ZONES_GEOJSON.exists():
+        make_geojson(RAW_DATA_DIR, CLEAN_DATA_DIR)
+    if not CLEAN_TAXI_ZONE_LOOKUP_CSV.exists():
+        make_zone_lookup(RAW_DATA_DIR, CLEAN_DATA_DIR)
+    # Nettoyés mensuels: reconstruire si des bruts plus récents existent ou si des sorties manquent
+    from pathlib import Path as _P
+    raw_files = sorted(_P(RAW_DATA_DIR).glob("yellow_tripdata_*.parquet"))
+    needs_yellow = not CLEAN_YELLOW_MONTHLY_DIR.exists()
+    if not needs_yellow:
+        for p in raw_files:
+            ym = p.name.replace('.parquet','').split('_')[-1]
+            try:
+                y, m = map(int, ym.split('-'))
+            except Exception:
+                continue
+            monthly_target = clean_yellow_parquet_path(y, m)
+            if not monthly_target.exists() or monthly_target.stat().st_mtime < p.stat().st_mtime:
+                needs_yellow = True
+                break
+    if needs_yellow:
+        print("[info] (Re)nettoyage des parquets mensuels…")
+        make_yellow_clean(RAW_DATA_DIR, CLEAN_DATA_DIR)
+    else:
+        print("[info] Données nettoyées déjà à jour.")
+
 
 def build_app():
     zones_gdf = gpd.read_file(CLEAN_TAXI_ZONES_GEOJSON)
-    df = pd.read_parquet(CLEAN_YELLOW_PARQUET)
+    # Déterminer les mois disponibles à partir des fichiers nettoyés mensuels
+    monthly_paths = sorted(CLEAN_YELLOW_MONTHLY_DIR.glob("yellow_clean_*.parquet"))
+    months_all: list[str] = []
+    for p in monthly_paths:
+        ym = p.name.replace(".parquet", "").split("_")[-1]
+        months_all.append(ym)
+    months_all = sorted(set(months_all))
+    configured = [f"{y}-{m:02d}" for y, m in DEFAULT_PERIODS]
+    months = [m for m in months_all if m in configured] or months_all or ["(indéfini)"]
+
+    # Lire un fichier mensuel pour déterminer les colonnes dispo
+    if monthly_paths:
+        sample_df = pd.read_parquet(monthly_paths[-1])
+        cols_available = set(sample_df.columns)
+        numeric_hist_cols = [c for c in ["trip_distance", "fare_amount", "tip_amount"] if c in cols_available]
+    else:
+        cols_available = set()
+        numeric_hist_cols = []
 
     boroughs = sorted(zones_gdf["borough"].dropna().unique())
-    numeric_hist_cols = [c for c in ["trip_distance", "fare_amount", "tip_amount"] if c in df.columns]
-
-    # Pré-agrégats pour la carte
-    def agg_map(metric: str) -> pd.DataFrame:
-        if metric == "count":
-            out = df.value_counts("PULocationID").rename("value").reset_index()
-        elif metric in df.columns:
-            out = df.groupby("PULocationID", dropna=False)[metric].mean().rename("value").reset_index()
-        else:
-            out = df.value_counts("PULocationID").rename("value").reset_index()
-        return out.rename(columns={"PULocationID": "LocationID"})
-
-    aggs_cache = {m: agg_map(m) for m in ["count", "trip_distance", "fare_amount", "tip_amount"] if (m == "count" or m in df.columns)}
 
     app = Dash(__name__)
-    app.title = "NYC Yellow Taxi — Dashboard (minimal)"
+    app.title = "Dashboard NYC Yellow Taxi"
 
     app.layout = html.Div(style={"fontFamily":"Inter, system-ui", "padding":"8px 12px"}, children=[
         html.H1("NYC Yellow Taxi — Dashboard (minimal)", style={"margin":"8px 0 4px"}),
@@ -76,13 +97,33 @@ def build_app():
             ], style={"marginBottom":"8px"}),
 
             html.Div([
+                html.Label("Mois"),
+                dcc.Slider(
+                    id="month-index",
+                    min=0,
+                    max=len(months)-1,
+                    step=1,
+                    value=len(months)-1,
+                    marks={i: m for i, m in enumerate(months)},
+                    included=False,
+                    updatemode="drag",
+                ),
+                html.Div(id="info", style={"marginTop":"6px", "color":"#6b7280"}),
+                html.Div([
+                    html.Button("Play", id="play", n_clicks=0, style={"marginRight":"6px"}),
+                    html.Button("Pause", id="pause", n_clicks=0),
+                    dcc.Interval(id="timer", interval=4000, n_intervals=0, disabled=True),      # intervalle à 4s car long à charger
+                ], style={"marginTop":"6px"}),
+            ], style={"marginBottom":"8px"}),
+
+            html.Div([
                 html.Label("Métrique (carte)"),
                 dcc.Dropdown(id="metric", value="count", clearable=False, style={"width":"320px"},
                     options=(
                         [{"label":"Pickups (count)","value":"count"}] +
-                        ([{"label":"Distance moyenne (mi)","value":"trip_distance"}] if "trip_distance" in df.columns else []) +
-                        ([{"label":"Montant moyen ($)","value":"fare_amount"}] if "fare_amount" in df.columns else []) +
-                        ([{"label":"Pourboire moyen ($)","value":"tip_amount"}] if "tip_amount" in df.columns else [])
+                        ([{"label":"Distance moyenne (mi)","value":"trip_distance"}] if "trip_distance" in cols_available else []) +
+                        ([{"label":"Montant moyen ($)","value":"fare_amount"}] if "fare_amount" in cols_available else []) +
+                        ([{"label":"Pourboire moyen ($)","value":"tip_amount"}] if "tip_amount" in cols_available else [])
                     )),
             ]),
         ]),
@@ -107,20 +148,73 @@ def build_app():
     # Callbacks
     @app.callback(Output("map","figure"),
                   Input("metric","value"),
-                  Input("borough-filter","value"))
-    def _map(metric, borough_filter):
+                  Input("borough-filter","value"),
+                  Input("month-index","value"))
+    def _map(metric, borough_filter, month_idx):
         label = {
             "count":"Pickups",
             "trip_distance":"Distance moyenne (mi)",
             "fare_amount":"Montant moyen ($)",
             "tip_amount":"Pourboire moyen ($)",
         }.get(metric, "Valeur")
-        return make_map_figure(zones_gdf, aggs_cache.get(metric, aggs_cache["count"]), borough_filter, label)
+        current_month = months[month_idx] if 0 <= month_idx < len(months) else months[-1]
+        try:
+            y, m = map(int, current_month.split('-'))
+            df_month = pd.read_parquet(clean_yellow_parquet_path(y, m))
+        except Exception:
+            df_month = pd.DataFrame(columns=["PULocationID"])  # vide
+        if metric == "count":
+            agg_month = df_month.value_counts("PULocationID").rename("value").reset_index()
+        elif metric in df_month.columns:
+            agg_month = df_month.groupby("PULocationID", dropna=False)[metric].mean().rename("value").reset_index()
+        else:
+            agg_month = df_month.value_counts("PULocationID").rename("value").reset_index()
+        agg_month = agg_month.rename(columns={"PULocationID": "LocationID"})
+        return make_map_figure(zones_gdf, agg_month, borough_filter, f"{label} — {current_month}")
 
     @app.callback(Output("hist","figure"),
-                  Input("hist-col","value"))
-    def _hist(col):
-        return make_hist_figure(df, col)
+                  Input("hist-col","value"),
+                  Input("month-index","value"))
+    def _hist(col, month_idx):
+        current_month = months[month_idx] if 0 <= month_idx < len(months) else months[-1]
+        try:
+            y, m = map(int, current_month.split('-'))
+            df_month = pd.read_parquet(clean_yellow_parquet_path(y, m))
+        except Exception:
+            df_month = pd.DataFrame(columns=[col])
+        fig = make_hist_figure(df_month, col)
+        fig.update_layout(title=(fig.layout.title.text or "Histogramme") + f" — {current_month}")
+        return fig
+
+    # Lecture automatique du slider
+    @app.callback(Output("timer", "disabled"),
+                  Input("play", "n_clicks"),
+                  Input("pause", "n_clicks"))
+    def _toggle_timer(n_play, n_pause):
+        n_play = n_play or 0
+        n_pause = n_pause or 0
+        return not (n_play > n_pause)
+
+    @app.callback(Output("month-index", "value"),
+                  Input("timer", "n_intervals"),
+                  State("month-index", "value"))
+    def _advance_slider(_n, idx):
+        if not months:
+            return 0
+        return (idx + 1) % len(months)
+
+    @app.callback(Output("info", "children"),
+                  Input("month-index", "value"))
+    def _info_msg(month_idx):
+        current_month = months[month_idx] if 0 <= month_idx < len(months) else months[-1]
+        try:
+            y, m = map(int, current_month.split('-'))
+            p = clean_yellow_parquet_path(y, m)
+            if not p.exists() or pd.read_parquet(p).empty:
+                return f"Aucune donnée disponible pour {current_month}."
+        except Exception:
+            return f"Aucune donnée disponible pour {current_month}."
+        return ""
 
     return app
 

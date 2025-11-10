@@ -9,7 +9,8 @@ from src.utils.common_functions import load_shapefile, to_geojson_wgs84
 from src.utils.paths import (
     TAXI_ZONES_SHP,
     CLEAN_TAXI_ZONES_GEOJSON,
-    CLEAN_YELLOW_PARQUET,
+    CLEAN_YELLOW_MONTHLY_DIR,
+    clean_yellow_parquet_path,
     RAW_TAXI_ZONE_LOOKUP_CSV,
     CLEAN_TAXI_ZONE_LOOKUP_CSV,
 )
@@ -32,30 +33,55 @@ def make_yellow_clean(raw_dir: Path, clean_dir: Path) -> Path:
     if not parquet_files:
         raise FileNotFoundError(f"Aucun fichier yellow_tripdata_*.parquet dans {raw_dir}")
 
-    frames = [pd.read_parquet(path) for path in parquet_files]
-    df = pd.concat(frames, ignore_index=True)
+    # Assure le répertoire des nettoyés mensuels
+    CLEAN_YELLOW_MONTHLY_DIR.mkdir(parents=True, exist_ok=True)
 
-    required_columns: Iterable[str] = [
-        "tpep_pickup_datetime",
-        "PULocationID",
-        "trip_distance",
-        "fare_amount",
-        "tip_amount",
-        "passenger_count",
-    ]
-    existing_cols = [c for c in required_columns if c in df.columns]
-    if existing_cols:
-        df = df[existing_cols]
+    monthly_frames = []
+    for path in parquet_files:
+        # Déduire (year, month) à partir du nom de fichier
+        name = path.name
+        try:
+            stem = name.replace(".parquet", "")
+            ym = stem.split("_")[-1]  # '2025-03'
+            year = int(ym.split("-")[0])
+            month = int(ym.split("-")[1])
+        except Exception:
+            # Si parsing échoue, continuer mais sans sortie mensuelle dédiée
+            year = month = None
 
-    if "tpep_pickup_datetime" in df.columns:
-        df["tpep_pickup_datetime"] = pd.to_datetime(df["tpep_pickup_datetime"], errors="coerce")
+        dfm = pd.read_parquet(path)
 
-    df = df.dropna(subset=["PULocationID"]).copy()
-    df["PULocationID"] = df["PULocationID"].astype("Int64")
+        required_columns: Iterable[str] = [
+            "tpep_pickup_datetime",
+            "PULocationID",
+            "trip_distance",
+            "fare_amount",
+            "tip_amount",
+            "passenger_count",
+        ]
+        existing_cols = [c for c in required_columns if c in dfm.columns]
+        if existing_cols:
+            dfm = dfm[existing_cols]
 
-    CLEAN_YELLOW_PARQUET.parent.mkdir(parents=True, exist_ok=True)
-    df.to_parquet(CLEAN_YELLOW_PARQUET, index=False)
-    return CLEAN_YELLOW_PARQUET
+        if "tpep_pickup_datetime" in dfm.columns:
+            dfm["tpep_pickup_datetime"] = pd.to_datetime(dfm["tpep_pickup_datetime"], errors="coerce")
+            dfm["year_month"] = dfm["tpep_pickup_datetime"].dt.to_period("M").astype(str)
+
+        dfm = dfm.dropna(subset=["PULocationID"]).copy()
+        dfm["PULocationID"] = dfm["PULocationID"].astype("Int64")
+
+        # Écrit un parquet nettoyé mensuel si (year, month) reconnu
+        if year is not None and month is not None:
+            monthly_path = clean_yellow_parquet_path(year, month)
+            dfm.to_parquet(monthly_path, index=False)
+
+        monthly_frames.append(dfm)
+
+    # Concatène et écrit le parquet global combiné pour la simplicité du dashboard
+    df = pd.concat(monthly_frames, ignore_index=True)
+
+    # Retourne le répertoire contenant les nettoyés mensuels
+    return CLEAN_YELLOW_MONTHLY_DIR
 
 
 def make_zone_lookup(raw_dir: Path, clean_dir: Path) -> Path:
