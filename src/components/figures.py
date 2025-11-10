@@ -80,23 +80,75 @@ def make_map_figure(
     fig.update_layout(margin=dict(l=0, r=0, t=40, b=0), title=f"Carte — {metric_label}")
     return fig
 
-def make_hist_figure(df: pd.DataFrame, col: str):
-    if col not in df.columns:
-        return px.histogram()
-
-    # 1) nettoyer
-    s = pd.to_numeric(df[col], errors="coerce").replace([np.inf, -np.inf], np.nan).dropna()
-    s = s[s > 0].astype(float)
-    if s.empty:
-        return px.histogram()
-
+def make_hist_figure(
+    df: pd.DataFrame,
+    col: str,
+    x_min: Optional[float] = None,
+    x_max: Optional[float] = None,
+    y_max: Optional[float] = None,
+):
     # régler les barres
     NBINS = 40
     BARGAP = 0.03
 
+    if col not in df.columns:
+        # Retourne une figure vide mais cohérente si des bornes sont fournies
+        if x_min is not None and x_max is not None:
+            xmin_dec = int(np.floor(np.log10(x_min)))
+            xmax_dec = int(np.ceil(np.log10(x_max)))
+            edges = np.logspace(xmin_dec, xmax_dec, NBINS + 1)
+            mid = np.sqrt(edges[:-1] * edges[1:])
+            counts = np.zeros_like(mid)
+            fig = px.bar(x=mid, y=counts, labels={"x": col, "y": "Nombre de trajets"})
+            tickvals = [10**k for k in range(xmin_dec, xmax_dec + 1)]
+            ticktext = [f"{v:.0f}" if v >= 1 else f"{v:.3g}" for v in tickvals]
+            fig.update_xaxes(type="log", tickmode="array", tickvals=tickvals, ticktext=ticktext, range=[xmin_dec, xmax_dec])
+            if y_max is not None:
+                fig.update_yaxes(range=[0, float(y_max)])
+            return fig
+        return px.histogram()
+
+    # Nettoyer
+    s = pd.to_numeric(df[col], errors="coerce").replace([np.inf, -np.inf], np.nan).dropna()
+    s = s[s > 0].astype(float)
+    # Si la série est vide pour le mois courant, créer une figure vide avec les bornes globales
+    if s.empty and (x_min is not None and x_max is not None):
+        xmin_dec = int(np.floor(np.log10(x_min)))
+        xmax_dec = int(np.ceil(np.log10(x_max)))
+        edges = np.logspace(xmin_dec, xmax_dec, NBINS + 1)
+        mid = np.sqrt(edges[:-1] * edges[1:])
+        counts = np.zeros_like(mid)
+        fig = px.bar(x=mid, y=counts, labels={"x": col, "y": "Nombre de trajets"})
+        fig.update_traces(
+            customdata=np.c_[edges[:-1], edges[1:]],
+            hovertemplate=(
+                "value ∈ [%{customdata[0]:.3g}, %{customdata[1]:.3g}]<br>"
+                "count = %{y:.0f}<extra></extra>"
+            ),
+            width=(edges[1:] - edges[:-1]),
+            marker_line_width=0,
+            opacity=0.95,
+        )
+        tickvals = [10**k for k in range(xmin_dec, xmax_dec + 1)]
+        ticktext = [f"{v:.0f}" if v >= 1 else f"{v:.3g}" for v in tickvals]
+        fig.update_xaxes(type="log", title=col + " (échelle log)", tickmode="array", tickvals=tickvals, ticktext=ticktext, ticks="outside", ticklen=6, tickwidth=1, range=[xmin_dec, xmax_dec])
+        fig.update_yaxes(title="Nombre de trajets", ticks="outside", ticklen=6, tickwidth=1, tickformat=".0f", separatethousands=True)
+        if y_max is not None:
+            fig.update_yaxes(range=[0, float(y_max)])
+        fig.update_layout(margin=dict(l=10, r=10, t=60, b=10), bargap=0.03, bargroupgap=0, title=f"Répartition du nombre de trajets en fonction de {col} sous forme d'histogramme")
+        return fig
+    if s.empty:
+        return px.histogram()
+
     # axe x en échelle LOG
-    xmin = int(np.floor(np.log10(s.min())))
-    xmax = int(np.ceil(np.log10(s.max())))
+    base_min = s.min()
+    base_max = s.max()
+    if x_min is not None:
+        base_min = min(float(x_min), base_min)
+    if x_max is not None:
+        base_max = max(float(x_max), base_max)
+    xmin = int(np.floor(np.log10(base_min)))
+    xmax = int(np.ceil(np.log10(base_max)))
 
     edges = np.logspace(xmin, xmax, NBINS + 1)      # [lo0, lo1, ... hiN]
     counts, _ = np.histogram(s.values, bins=edges)
@@ -134,9 +186,10 @@ def make_hist_figure(df: pd.DataFrame, col: str):
         tickmode="array",
         tickvals=tickvals,
         ticktext=ticktext,
-        ticks="outside", 
-        ticklen=6, 
-        tickwidth=1
+        ticks="outside",
+        ticklen=6,
+        tickwidth=1,
+        range=[xmin, xmax]
     )
     fig.update_yaxes(
         title="Nombre de trajets",
@@ -146,6 +199,8 @@ def make_hist_figure(df: pd.DataFrame, col: str):
         tickformat=".0f",
         separatethousands=True
         )
+    if y_max is not None:
+        fig.update_yaxes(range=[0, float(y_max)])
     fig.update_layout(
         margin=dict(l=10, r=10, t=60, b=10),
         bargap=BARGAP,
