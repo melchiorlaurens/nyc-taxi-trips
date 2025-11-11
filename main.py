@@ -152,21 +152,6 @@ def build_app():
             ], style={"marginBottom":"8px"}),
 
             html.Div([
-                html.Label("Mois"),
-                dcc.Slider(
-                    id="month-index",
-                    min=0,
-                    max=len(months)-1,
-                    step=1,
-                    value=len(months)-1,
-                    marks={i: m for i, m in enumerate(months)},
-                    included=False,
-                    updatemode="drag",
-                ),
-                html.Div(id="info", style={"marginTop":"6px", "color":"#6b7280"}),
-            ]
-            ),
-            html.Div([
                 html.Label("Métrique (carte)"),
                 dcc.Dropdown(id="metric", value="count", clearable=False, style={"width":"320px"},
                     options=(
@@ -192,7 +177,35 @@ def build_app():
                 style={"width":"320px"}
             )
         ]),
-        dcc.Graph(id="hist", style={"height":"100vh"})
+        dcc.Graph(id="hist", style={"height":"80vh", "marginBottom":"60px"}),
+
+        # Overlay fixe pour garder le slider visible pendant le scroll
+        html.Div([
+            html.Label("Mois", style={"fontWeight":"bold", "textAlign":"center", "display":"block"}),
+            dcc.Slider(
+                id="month-index",
+                min=0,
+                max=len(months)-1,
+                step=1,
+                value=len(months)-1,
+                marks={i: {"label": m, "style": {"whiteSpace": "nowrap", "fontSize": "12px"}} for i, m in enumerate(months)},
+                included=False,
+                updatemode="drag",
+            ),
+            html.Div(id="info", style={"marginTop":"6px", "color":"#6b7280"}),
+        ], style={
+            "position": "fixed",
+            "left": "12px",
+            "right": "12px",
+            "bottom": "12px",
+            "zIndex": 1000,
+            "background": "rgba(255,255,255,0.96)",
+            "backdropFilter": "blur(2px)",
+            "padding": "0px 14px",
+            "border": "1px solid #e5e7eb",
+            "borderRadius": "10px",
+            "boxShadow": "0 6px 18px rgba(0,0,0,0.08)",
+        })
     ])
 
     # Callbacks
