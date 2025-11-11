@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Iterable
 
 import pandas as pd
+from pydantic import BaseModel, Field
 
 from src.utils.common_functions import load_shapefile, to_geojson_wgs84
 from src.utils.paths import (
@@ -16,6 +17,55 @@ from src.utils.paths import (
 )
 
 
+class OutlierThresholds(BaseModel):
+    """Defines the threshold values for outlier filtering."""
+
+    max_trip_distance: float = Field(
+        default=5000.0,
+        description="Maximum trip distance in miles. Trips above this are discarded."
+    )
+    max_fare_amount: float = Field(
+        default=10000.0,
+        description="Maximum fare amount in dollars. Fares above this are discarded."
+    )
+    max_tip_amount: float = Field(
+        default=10000.0,
+        description="Maximum tip amount in dollars. Tips above this are discarded."
+    )
+
+
+def filter_outliers(df: pd.DataFrame, thresholds: OutlierThresholds) -> pd.DataFrame:
+    """
+    Filter out outlier records based on defined thresholds.
+
+    Args:
+        df: DataFrame to filter
+        thresholds: OutlierThresholds instance with filtering rules
+
+    Returns:
+        Filtered DataFrame with outliers removed
+    """
+    initial_count = len(df)
+
+    # Filter trip distance (only upper bound)
+    if "trip_distance" in df.columns:
+        df = df[df["trip_distance"] <= thresholds.max_trip_distance]
+
+    # Filter fare amount (only upper bound)
+    if "fare_amount" in df.columns:
+        df = df[df["fare_amount"] <= thresholds.max_fare_amount]
+
+    # Filter tip amount (only upper bound)
+    if "tip_amount" in df.columns:
+        df = df[df["tip_amount"] <= thresholds.max_tip_amount]
+
+    filtered_count = initial_count - len(df)
+    if filtered_count > 0:
+        print(f"Filtered {filtered_count:,} outlier records ({filtered_count/initial_count*100:.2f}%)")
+
+    return df
+
+
 def make_geojson(raw_dir: Path, clean_dir: Path) -> Path:
     """Convert the taxi zones shapefile to a WGS84 GeoJSON used by the app."""
     gdf = load_shapefile(TAXI_ZONES_SHP)
@@ -26,8 +76,8 @@ def make_yellow_clean(raw_dir: Path, clean_dir: Path) -> Path:
     """
     Load the yellow trip parquet files found in raw_dir and write the cleaned parquet.
 
-    The cleaning stays minimal for now: concatenate all matching files, keep the
-    columns used by the dashboard, and drop rows missing the pickup zone.
+    The cleaning includes: concatenate all matching files, keep the columns used by
+    the dashboard, drop rows missing the pickup zone, and filter outliers.
     """
     parquet_files = sorted(raw_dir.glob("yellow_tripdata_*.parquet"))
     if not parquet_files:
@@ -35,6 +85,9 @@ def make_yellow_clean(raw_dir: Path, clean_dir: Path) -> Path:
 
     # Assure le répertoire des nettoyés mensuels
     CLEAN_YELLOW_MONTHLY_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Initialize outlier thresholds
+    thresholds = OutlierThresholds()
 
     monthly_frames = []
     for path in parquet_files:
@@ -69,6 +122,9 @@ def make_yellow_clean(raw_dir: Path, clean_dir: Path) -> Path:
 
         dfm = dfm.dropna(subset=["PULocationID"]).copy()
         dfm["PULocationID"] = dfm["PULocationID"].astype("Int64")
+
+        # Filter outliers
+        dfm = filter_outliers(dfm, thresholds)
 
         # Écrit un parquet nettoyé mensuel si (year, month) reconnu
         if year is not None and month is not None:
