@@ -37,3 +37,8 @@ CLEAN_YELLOW_MONTHLY_DIR = CLEAN_DATA_DIR / "yellow_monthly"
 def clean_yellow_parquet_path(year: int, month: int) -> Path:
     """Return the path for a monthly cleaned parquet (per month)."""
     return CLEAN_YELLOW_MONTHLY_DIR / f"yellow_clean_{year}-{month:02d}.parquet"
+
+# Background image configuration (dashboard theming)
+BACKGROUND_DIR = PROJECT_ROOT / "background"
+BACKGROUND_IMAGE_NAME = "nyc_background_1.jpg"  # place your image there
+BACKGROUND_IMAGE_PATH = BACKGROUND_DIR / BACKGROUND_IMAGE_NAME

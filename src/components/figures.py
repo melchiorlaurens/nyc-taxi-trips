@@ -66,7 +66,7 @@ def make_map_figure(
         hover_data=None,
         custom_data=["zone_display", "borough_display", "value_display"],
     )
-    fig.update_geos(fitbounds="locations", visible=False)
+    fig.update_geos(fitbounds="locations", visible=False, bgcolor="#0f172a")
     fig.update_traces(
         hovertemplate=_build_hovertemplate(),
         hoverlabel=dict(
@@ -77,7 +77,13 @@ def make_map_figure(
             namelength=0,
         ),
     )
-    fig.update_layout(margin=dict(l=0, r=0, t=40, b=0), title=f"Carte — {metric_label}")
+    fig.update_layout(
+        margin=dict(l=0, r=0, t=40, b=0),
+        title=f"Carte — {metric_label}",
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+    )
     return fig
 
 def make_hist_figure(
@@ -209,6 +215,9 @@ def make_hist_figure(
         margin=dict(l=10, r=10, t=60, b=10),
         bargap=BARGAP,
         bargroupgap=0,
-        title=f"Répartition du nombre de trajets en fonction de {col} sous forme d'histogramme"
+        title=f"Répartition du nombre de trajets en fonction de {col} sous forme d'histogramme",
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
     )
     return fig

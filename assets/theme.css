@@ -1,0 +1,65 @@
+/* Make the app truly full-bleed with no white gutters */
+html, body {
+  height: 100%;
+  margin: 0;
+  background: #0b1220; /* fallback if bg image fails */
+}
+
+/* Global font setup */
+@font-face {
+  font-family: 'Rubik-Variable';
+  src: url('/assets/fonts/Rubik-VariableFont_wght.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --ui-font: 'Rubik-Variable', 'Inter', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', system-ui, -apple-system, sans-serif;
+  --ui-font-serif: 'Merriweather', Georgia, 'Times New Roman', serif;
+  --ui-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+}
+
+/* Apply the UI font everywhere */
+html, body, #_dash-app-layout, #_dash-app-content, * {
+  font-family: var(--ui-font) !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#_dash-app-layout, #_dash-app-content {
+  min-height: 100vh;
+  background: transparent !important; /* let the root bg show through */
+}
+
+#_dash-app-content {
+  min-height: 100vh;
+}
+
+/* Remove any white gutters around plots */
+.dash-graph, .js-plotly-plot {
+  background: transparent !important;
+  border: 0 !important;
+}
+
+/* Tweak basic form controls for dark theme readability */
+.dash-dropdown, .dash-dropdown * {
+  color: #e5e7eb !important;
+}
+.dash-dropdown .Select-control {
+  background-color: rgba(31,41,55,0.75) !important;
+  border-color: #374151 !important;
+}
+.dash-dropdown .Select-menu-outer { 
+  background-color: #111827 !important; 
+  border-color: #374151 !important;
+}
+
+label { color: #d1d5db; }
+
+/* Darker horizontal rule to avoid bright white lines */
+hr {
+  border: 0;
+  border-top: 1px solid rgba(229, 231, 235, 0.12);
+  margin: 8px 0;
+}
