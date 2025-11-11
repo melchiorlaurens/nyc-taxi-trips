@@ -17,6 +17,7 @@ from src.utils.paths import (
     CLEAN_TAXI_ZONE_LOOKUP_CSV,
     CLEAN_YELLOW_MONTHLY_DIR,
     clean_yellow_parquet_path,
+    BACKGROUND_IMAGE_PATH,
 )
 
 # ---------------- Config ----------------
@@ -24,6 +25,7 @@ from src.utils.paths import (
 
 def ensure_clean():
     """Prépare les données si besoin et génère les fichiers cleaned attendus par le dashboard."""
+    print("[info] Analyse des données…")
     RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
     # Télécharge selon la config (si manquants)
     download_months(DEFAULT_PERIODS)
@@ -121,149 +123,223 @@ def build_app():
     app = Dash(__name__)
     app.title = "Dashboard NYC Yellow Taxi"
 
-    app.layout = html.Div(style={"fontFamily":"Inter, system-ui",
-                                 "padding":"8px 12px"
-                                 }, children=[
-        html.H1("Dashboard : NYC Yellow Taxi",
-                style={"margin":"8px 0 4px"}
-                ),
-        html.Div("Exécution : python main.py"),
-        html.Hr(),
+    # Background image (if present) and dark theme base colors
+    import base64
+    from pathlib import Path as _Path
+    bg_style = {
+        "minHeight": "100vh",
+        "backgroundColor": "#0b1220",
+        "backgroundSize": "cover",
+        "backgroundAttachment": "fixed",
+        "backgroundPosition": "center center",
+        "color": "#e5e7eb",
 
-        # Carte
-        html.Div([
-            html.Div([
-                html.Label("Boroughs (filtre carte)"),
-                dcc.Checklist(id="borough-filter",
-                    options=[{"label":b,"value":b} for b in boroughs],
-                    value=boroughs, inline=True),
-            ], style={"marginBottom":"8px"}),
-
-            html.Div([
-                html.Label("Métrique (carte)",
-                           style={"fontWeight":"bold",
-                                  "marginBottom":"6px"
-                                  }
-                           ),
-                dcc.Dropdown(id="metric",
-                             value="count",
-                             clearable=False,
-                             style={"width":"320px"},
-                            options=(
-                                [{"label":"Pickups (count)","value":"count"}] +
-                                ([{"label":"Distance moyenne (mi)","value":"trip_distance"}] if "trip_distance" in cols_available else []) +
-                                ([{"label":"Montant moyen ($)","value":"fare_amount"}] if "fare_amount" in cols_available else []) +
-                                ([{"label":"Pourboire moyen ($)","value":"tip_amount"}] if "tip_amount" in cols_available else [])
-                            )),
-            ], style={
-        "display": "flex",
-        "flexDirection": "column",
-        "alignItems": "center",
-        "justifyContent": "center",
-        "marginTop": "20px",
-        "marginBottom": "10px"
-    }),
-        ]),
-        dcc.Graph(id="map", style={"height":"62vh",
-                                   "marginTop":"8px"
-                                   }),
-
-        html.Hr(),
-
-        # Histogramme
-        html.Div([
-            html.Label("Veuillez choisir la variable à afficher sur l'histogramme : distance (en miles), le montant ($), ou le pourboire ($)",
-                       style={"fontWeight":"bold",
-                              "marginBottom":"6px"
-                              }),
-            dcc.Dropdown(
-                id="hist-col",
-                options=[{"label": c, "value": c} for c in numeric_hist_cols] or [{"label":"(aucune)","value":"_none"}],
-                value=("trip_distance" if "trip_distance" in numeric_hist_cols else (numeric_hist_cols[0] if numeric_hist_cols else "_none")),
-                clearable=False,
-                style={"width":"320px"}
+    }
+    try:
+        if BACKGROUND_IMAGE_PATH.exists():
+            mime = "image/" + BACKGROUND_IMAGE_PATH.suffix.lstrip(".").lower()
+            data = base64.b64encode(_Path(BACKGROUND_IMAGE_PATH).read_bytes()).decode("ascii")
+            bg_style["backgroundImage"] = (
+                f"linear-gradient(rgba(0,0,0,0.45), rgba(0,0,0,0.45)), url('data:{mime};base64,{data}')"
             )
-        ], style={
-        "display": "flex",
-        "flexDirection": "column",
-        "alignItems": "center",
-        "justifyContent": "center",
-        "marginTop": "20px",
-        "marginBottom": "10px"
-        }),
+    except Exception:
+        pass
 
-        # Scale controls for histogram
-        html.Div([
+    app.layout = html.Div(
+        style={
+            "fontFamily":"Rubik-Variable, system-ui, sans-serif",
+            "padding":"0",
+            **bg_style,
+            }, 
+        children=[
+            html.H1("Dashboard : NYC Yellow Taxi",
+                    style={
+                        "margin":"8px 0 4px",
+                        "fontWeight":"800",
+                        "fontSize":"28px",
+                        "textAlign":"center",
+                        "color":"#f3f4f6",
+                        }
+                    ),
+            html.Div("Exécution : python main.py",
+                     style={
+                         
+                         "textAlign":"center",
+                         "color":"#9ca3af",
+                         "fontSize":"14px"
+                         }
+                    ),
+            html.Hr(),
+
+            # Carte
             html.Div([
-                html.Label("Échelle de l'axe X"),
-                dcc.RadioItems(
-                    id="hist-scale-type",
-                    options=[
-                        {"label": "Logarithmique", "value": "log"},
-                        {"label": "Linéaire", "value": "linear"}
-                    ],
-                    value="log",
-                    inline=True
-                )
-            ], style={"marginBottom":"8px", "textAlign":"center"}),
+                html.Div([
+                    html.Label("Métrique (carte)",
+                               style={
+                                   "fontWeight":"bold",
+                                   "marginBottom":"6px"
+                                   }
+                               ),
+                    dcc.Dropdown(id="metric",
+                                 value="count",
+                                 clearable=False,
+                                 style={"width":"320px"},
+                                 options=(
+                                     [{"label":"Pickups (count)","value":"count"}] +
+                                     ([{"label":"Distance moyenne (mi)","value":"trip_distance"}] if "trip_distance" in cols_available else []) +
+                                     ([{"label":"Montant moyen ($)","value":"fare_amount"}] if "fare_amount" in cols_available else []) +
+                                     ([{"label":"Pourboire moyen ($)","value":"tip_amount"}] if "tip_amount" in cols_available else [])
+                                 )
+                                 ),
+                    ], 
+                    style={
+                        "display": "flex",
+                        "flexDirection": "column",
+                        "alignItems": "center",
+                        "justifyContent": "center",
+                        "marginTop": "20px",
+                        "marginBottom": "10px"
+                        }
+                    ),
+                
+                html.Div([
+                    html.Label("Arrondissements de New York :"),
+                    dcc.Checklist(id="borough-filter",
+                                  options=[{"label":b,"value":b} for b in boroughs],
+                                  value=boroughs, inline=True)
+                    ], 
+                    style={
+                        "margin":"10px 0",
+                        "textAlign":"center"
+                        }
+                    ),
+            ]),
+            dcc.Graph(id="map", 
+                      style={
+                          "height":"62vh",
+                          "marginTop":"8px"
+                          }
+                      ),
+
+            html.Hr(),
+
+            # Histogramme
             html.Div([
-                html.Label("Plage de l'axe X (min - max)"),
-                dcc.RangeSlider(
-                    id="hist-range-slider",
-                    min=0,
-                    max=100,
-                    step=0.1,
-                    value=[0, 100],
-                    marks={},
-                    tooltip={"placement": "bottom", "always_visible": False},
-                    allowCross=False
-                )
-            ], style={"marginBottom":"8px"})
-        ], style={"marginBottom":"10px"}),
-
-        dcc.Graph(id="hist",
-                  style={"height":"80vh",
-                         "marginBottom":"70px"
-                         }),
-
-        # Overlay fixe pour garder le slider visible pendant le scroll
-        html.Div([
-            html.Label("Mois",
-                       style={"fontWeight":"bold",
-                              "textAlign":"center",
-                              "display":"block"
-                              }),
-            dcc.Slider(
-                id="month-index",
-                min=0,
-                max=len(months)-1,
-                step=1,
-                value=len(months)-1,
-                marks={i: {"label": m,
-                           "style": {"whiteSpace": "nowrap",
-                                     "fontSize": "12px"
-                                     }} for i, m in enumerate(months)},
-                included=False,
-                updatemode="drag",
+                html.Label("Veuillez choisir la variable à afficher sur l'histogramme : distance (en miles), le montant ($), ou le pourboire ($)",
+                           style={
+                               "fontWeight":"bold",
+                               "marginBottom":"6px"
+                               }
+                           ),
+                dcc.Dropdown(id="hist-col",
+                             options=[{"label": c, "value": c} for c in numeric_hist_cols] or [{"label":"(aucune)","value":"_none"}],
+                             value=("trip_distance" if "trip_distance" in numeric_hist_cols else (numeric_hist_cols[0] if numeric_hist_cols else "_none")),
+                             clearable=False,
+                             style={"width":"320px"}
+                             )
+            ], 
+            style={
+                "display": "flex",
+                "flexDirection": "column",
+                "alignItems": "center",
+                "justifyContent": "center",
+                "marginTop": "20px",
+                "marginBottom": "10px"
+                }
             ),
+
+            # Scale controls for histogram
+            html.Div([
+                html.Div([
+                    html.Label("Échelle de l'axe X"),
+                    dcc.RadioItems(
+                        id="hist-scale-type",
+                        options=[{"label": "Logarithmique", "value": "log"},
+                                 {"label": "Linéaire", "value": "linear"}
+                                 ],
+                        value="log",
+                        inline=True
+                    )
+                ], 
+                style={
+                    "marginBottom":"8px",
+                    "textAlign":"center"
+                    }
+                ),
+                html.Div([
+                    html.Label("Plage de l'axe X (min - max)"),
+                    dcc.RangeSlider(id="hist-range-slider",
+                                    min=0,
+                                    max=100,
+                                    step=0.1,
+                                    value=[0, 100],
+                                    marks={},
+                                    tooltip={"placement": "bottom",
+                                             "always_visible": False
+                                             },
+                                    allowCross=False
+                                    )
+                ],
+                style={"marginBottom":"8px"}
+                )
+            ],
+            style={"marginBottom":"10px"}
+            ),
+
+            dcc.Graph(id="hist",
+                      style={
+                          "height":"80vh",
+                          "marginBottom":"90px"
+                          }
+                      ),
+
+            html.Div(style={"height":"60px"}), # permet de décaler le contenu au-dessus du slider fixe
+
+            # Overlay fixe pour garder le slider visible pendant le scroll
+            html.Div([
+                html.Label("Mois",
+                           style={
+                               "fontWeight":"bold",
+                               "textAlign":"center",
+                               "display":"block"
+                               }
+                           ),
+                dcc.Slider(id="month-index",
+                           min=0,
+                           max=len(months)-1,
+                           step=1,
+                           value=len(months)-1,
+                           marks={i: {"label": m,
+                                      "style": {
+                                          "whiteSpace": "nowrap",
+                                          "fontSize": "12px"
+                                          }
+                                      } for i, m in enumerate(months)},
+                           included=False,
+                           updatemode="drag",
+                ),
             html.Div(id="info",
-                     style={"marginTop":"6px",
-                            "color":"#6b7280"
-                            }),
-        ], style={
-            "position": "fixed",
-            "left": "12px",
-            "right": "12px",
-            "bottom": "12px",
-            "zIndex": 1000,
-            "background": "rgba(255,255,255,0.96)",
-            "backdropFilter": "blur(2px)",
-            "padding": "0px 14px",
-            "border": "1px solid #e5e7eb",
-            "borderRadius": "10px",
-            "boxShadow": "0 6px 18px rgba(0,0,0,0.08)",
-        })
-    ])
+                     style={
+                         "marginTop":"6px",
+                         "color":"#6b7280"
+                         }
+                     ),
+            ], 
+            style={
+                "position": "fixed",
+                "left": "12px",
+                "right": "12px",
+                "bottom": "12px",
+                "zIndex": 1000,
+                "background": "rgba(17,24,39,0.80)",
+                "backdropFilter": "blur(2px)",
+                "padding": "8px 14px",
+                "border": "0",
+                "borderRadius": "10px",
+                "boxShadow": "0 6px 18px rgba(0,0,0,0.35)",
+                }
+            )
+    ])  
 
     # Callbacks
     @app.callback(Output("map","figure"),
