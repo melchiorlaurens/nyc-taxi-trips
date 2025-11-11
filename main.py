@@ -137,9 +137,13 @@ def build_app():
     app = Dash(__name__)
     app.title = "Dashboard NYC Yellow Taxi"
 
-    app.layout = html.Div(style={"fontFamily":"Inter, system-ui", "padding":"8px 12px"}, children=[
-        html.H1("Dashboard : NYC Yellow Taxi", style={"margin":"8px 0 4px"}),
-        html.Div("Exécution : python main.py — données locales en cache (data/cleaned)"),
+    app.layout = html.Div(style={"fontFamily":"Inter, system-ui", 
+                                 "padding":"8px 12px"
+                                 }, children=[
+        html.H1("Dashboard : NYC Yellow Taxi", 
+                style={"margin":"8px 0 4px"}
+                ),
+        html.Div("Exécution : python main.py"),
         html.Hr(),
 
         # Carte
@@ -152,23 +156,42 @@ def build_app():
             ], style={"marginBottom":"8px"}),
 
             html.Div([
-                html.Label("Métrique (carte)"),
-                dcc.Dropdown(id="metric", value="count", clearable=False, style={"width":"320px"},
-                    options=(
-                        [{"label":"Pickups (count)","value":"count"}] +
-                        ([{"label":"Distance moyenne (mi)","value":"trip_distance"}] if "trip_distance" in cols_available else []) +
-                        ([{"label":"Montant moyen ($)","value":"fare_amount"}] if "fare_amount" in cols_available else []) +
-                        ([{"label":"Pourboire moyen ($)","value":"tip_amount"}] if "tip_amount" in cols_available else [])
-                    )),
-            ]),
+                html.Label("Métrique (carte)", 
+                           style={"fontWeight":"bold", 
+                                  "marginBottom":"6px"
+                                  }
+                           ),
+                dcc.Dropdown(id="metric", 
+                             value="count", 
+                             clearable=False, 
+                             style={"width":"320px"},
+                            options=(
+                                [{"label":"Pickups (count)","value":"count"}] +
+                                ([{"label":"Distance moyenne (mi)","value":"trip_distance"}] if "trip_distance" in cols_available else []) +
+                                ([{"label":"Montant moyen ($)","value":"fare_amount"}] if "fare_amount" in cols_available else []) +
+                                ([{"label":"Pourboire moyen ($)","value":"tip_amount"}] if "tip_amount" in cols_available else [])
+                            )),
+            ], style={
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "marginTop": "20px",
+        "marginBottom": "10px"
+    }),
         ]),
-        dcc.Graph(id="map", style={"height":"62vh","marginTop":"8px"}),
+        dcc.Graph(id="map", style={"height":"62vh",
+                                   "marginTop":"8px"
+                                   }),
 
         html.Hr(),
 
         # Histogramme
         html.Div([
-            html.Label("Veuillez choisir la variable à afficher sur l'histogramme : distance (en miles), le montant ($), ou le pourboire ($)"),
+            html.Label("Veuillez choisir la variable à afficher sur l'histogramme : distance (en miles), le montant ($), ou le pourboire ($)", 
+                       style={"fontWeight":"bold", 
+                              "marginBottom":"6px"
+                              }),
             dcc.Dropdown(
                 id="hist-col",
                 options=[{"label": c, "value": c} for c in numeric_hist_cols] or [{"label":"(aucune)","value":"_none"}],
@@ -176,23 +199,43 @@ def build_app():
                 clearable=False,
                 style={"width":"320px"}
             )
-        ]),
-        dcc.Graph(id="hist", style={"height":"80vh", "marginBottom":"60px"}),
+        ], style={
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "marginTop": "20px",
+        "marginBottom": "10px"
+        }),
+        dcc.Graph(id="hist", 
+                  style={"height":"80vh", 
+                         "marginBottom":"70px"
+                         }),
 
         # Overlay fixe pour garder le slider visible pendant le scroll
         html.Div([
-            html.Label("Mois", style={"fontWeight":"bold", "textAlign":"center", "display":"block"}),
+            html.Label("Mois", 
+                       style={"fontWeight":"bold", 
+                              "textAlign":"center", 
+                              "display":"block"
+                              }),
             dcc.Slider(
                 id="month-index",
                 min=0,
                 max=len(months)-1,
                 step=1,
                 value=len(months)-1,
-                marks={i: {"label": m, "style": {"whiteSpace": "nowrap", "fontSize": "12px"}} for i, m in enumerate(months)},
+                marks={i: {"label": m, 
+                           "style": {"whiteSpace": "nowrap", 
+                                     "fontSize": "12px"
+                                     }} for i, m in enumerate(months)},
                 included=False,
                 updatemode="drag",
             ),
-            html.Div(id="info", style={"marginTop":"6px", "color":"#6b7280"}),
+            html.Div(id="info", 
+                     style={"marginTop":"6px", 
+                            "color":"#6b7280"
+                            }),
         ], style={
             "position": "fixed",
             "left": "12px",
