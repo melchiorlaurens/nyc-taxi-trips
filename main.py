@@ -267,18 +267,21 @@ def build_app():
                     }
                 ),
                 html.Div([
-                    html.Label("Plage de l'axe X (min - max)"),
+                    html.Label("X axis range (min-max) - slider in log scale"),
                     dcc.RangeSlider(id="hist-range-slider",
                                     min=0,
-                                    max=100,
-                                    step=0.1,
-                                    value=[0, 100],
+                                    max=2,
+                                    step=0.01,
+                                    value=[0, 2],
                                     marks={},
-                                    tooltip={"placement": "bottom",
-                                             "always_visible": False
-                                             },
+                                    tooltip={
+                                        "placement": "bottom",
+                                        "always_visible": True,
+                                        "template": "{value}"
+                                    },
                                     allowCross=False
-                                    )
+                                    ),
+                    html.Div(id="slider-display", style={"fontSize": "11px", "color": "#9ca3af", "marginTop": "4px", "textAlign": "center"})
                 ],
                 style={"marginBottom":"8px"}
                 )
@@ -377,9 +380,19 @@ def build_app():
         if bounds:
             data_min = bounds["x_min"]
             data_max = bounds["x_max"]
-            marks = {data_min: f"{data_min:.2g}", data_max: f"{data_max:.2g}"}
-            return data_min, data_max, [data_min, data_max], marks
-        return 0, 100, [0, 100], {}
+            # Use log scale for slider
+            log_min = np.log10(max(data_min, 1e-12))
+            log_max = np.log10(data_max)
+            # Create marks at nice round numbers in log space
+            marks = {}
+            marks[log_min] = f"{data_min:.2g}"
+            marks[log_max] = f"{data_max:.2g}"
+            # Add intermediate marks at powers of 10
+            for i in range(int(np.floor(log_min)), int(np.ceil(log_max)) + 1):
+                if log_min < i < log_max:
+                    marks[i] = f"{10**i:.2g}"
+            return log_min, log_max, [log_min, log_max], marks
+        return 0, 2, [0, 2], {}
 
     @app.callback(Output("hist","figure"),
                   Input("hist-col","value"),
@@ -392,12 +405,34 @@ def build_app():
         if df_month.empty:
             df_month = pd.DataFrame(columns=[col])
 
-        xmin_filter = range_val[0] if range_val[0] > 0 else None
-        xmax_filter = range_val[1] if range_val[1] < float('inf') else None
+        # Convert from log scale (slider values) back to linear scale
+        xmin_filter = 10**range_val[0] if range_val[0] is not None else None
+        xmax_filter = 10**range_val[1] if range_val[1] is not None else None
+
+        # Apply minimum threshold
+        if xmin_filter is not None and xmin_filter > 0:
+            xmin_filter = xmin_filter
+        else:
+            xmin_filter = None
+
+        if xmax_filter is not None and xmax_filter < float('inf'):
+            xmax_filter = xmax_filter
+        else:
+            xmax_filter = None
 
         fig = make_hist_figure(df_month, col, xmin_filter, xmax_filter, scale_type)
         fig.update_layout(title=(fig.layout.title.text or "Histogramme") + f" — {current_month}")
         return fig
+
+    @app.callback(Output("slider-display", "children"),
+                  Input("hist-range-slider", "value"))
+    def _slider_display(range_val):
+        if range_val is None or len(range_val) != 2:
+            return ""
+        # Convert from log scale to linear scale
+        min_val = 10**range_val[0]
+        max_val = 10**range_val[1]
+        return f"Valeurs: {min_val:.3g} à {max_val:.3g}"
 
     @app.callback(Output("info", "children"),
                   Input("month-index", "value"))
