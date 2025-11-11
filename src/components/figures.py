@@ -83,41 +83,50 @@ def make_map_figure(
 def make_hist_figure(
     df: pd.DataFrame,
     col: str,
-    x_min: Optional[float] = None,
-    x_max: Optional[float] = None,
-    y_max: Optional[float] = None,
+    xmin_filter: Optional[float] = None,
+    xmax_filter: Optional[float] = None,
+    scale_type: str = "log",
 ):
-    # régler les barres
     NBINS = 40
     BARGAP = 0.03
 
     if col not in df.columns:
-        # Retourne une figure vide mais cohérente si des bornes sont fournies
-        if x_min is not None and x_max is not None:
-            xmin_dec = int(np.floor(np.log10(x_min)))
-            xmax_dec = int(np.ceil(np.log10(x_max)))
-            edges = np.logspace(xmin_dec, xmax_dec, NBINS + 1)
-            mid = np.sqrt(edges[:-1] * edges[1:])
-            counts = np.zeros_like(mid)
-            fig = px.bar(x=mid, y=counts, labels={"x": col, "y": "Nombre de trajets"})
-            tickvals = [10**k for k in range(xmin_dec, xmax_dec + 1)]
-            ticktext = [f"{v:.0f}" if v >= 1 else f"{v:.3g}" for v in tickvals]
-            fig.update_xaxes(type="log", tickmode="array", tickvals=tickvals, ticktext=ticktext, range=[xmin_dec, xmax_dec])
-            if y_max is not None:
-                fig.update_yaxes(range=[0, float(y_max)])
-            return fig
         return px.histogram()
 
-    # Nettoyer
     s = pd.to_numeric(df[col], errors="coerce").replace([np.inf, -np.inf], np.nan).dropna()
     s = s[s > 0].astype(float)
-    # Si la série est vide pour le mois courant, créer une figure vide avec les bornes globales
-    if s.empty and (x_min is not None and x_max is not None):
-        xmin_dec = int(np.floor(np.log10(x_min)))
-        xmax_dec = int(np.ceil(np.log10(x_max)))
-        edges = np.logspace(xmin_dec, xmax_dec, NBINS + 1)
+    if s.empty:
+        return px.histogram()
+
+    slider_min = None
+    slider_max = None
+    if xmin_filter is not None:
+        slider_min = float(xmin_filter)
+        if scale_type == "log":
+            slider_min = max(slider_min, 1e-12)
+    if xmax_filter is not None:
+        slider_max = float(xmax_filter)
+
+    s_filtered = s.copy()
+    if slider_min is not None:
+        s_filtered = s_filtered[s_filtered >= slider_min]
+    if slider_max is not None:
+        s_filtered = s_filtered[s_filtered <= slider_max]
+
+    if scale_type == "log":
+        range_min = slider_min if slider_min is not None else float(s.min())
+        range_max = slider_max if slider_max is not None else float(s.max())
+        range_min = max(range_min, 1e-12)
+        if range_max <= range_min:
+            range_max = range_min * (1 + 1e-9)
+
+        edges = np.logspace(np.log10(range_min), np.log10(range_max), NBINS + 1)
+        data_for_hist = s_filtered.values if not s_filtered.empty else np.array([])
+        counts, _ = np.histogram(data_for_hist, bins=edges)
+
+        widths = edges[1:] - edges[:-1]
         mid = np.sqrt(edges[:-1] * edges[1:])
-        counts = np.zeros_like(mid)
+
         fig = px.bar(x=mid, y=counts, labels={"x": col, "y": "Nombre de trajets"})
         fig.update_traces(
             customdata=np.c_[edges[:-1], edges[1:]],
@@ -125,82 +134,77 @@ def make_hist_figure(
                 "value ∈ [%{customdata[0]:.3g}, %{customdata[1]:.3g}]<br>"
                 "count = %{y:.0f}<extra></extra>"
             ),
-            width=(edges[1:] - edges[:-1]),
+            width=widths,
             marker_line_width=0,
             opacity=0.95,
         )
-        tickvals = [10**k for k in range(xmin_dec, xmax_dec + 1)]
-        ticktext = [f"{v:.0f}" if v >= 1 else f"{v:.3g}" for v in tickvals]
-        fig.update_xaxes(type="log", title=col + " (échelle log)", tickmode="array", tickvals=tickvals, ticktext=ticktext, ticks="outside", ticklen=6, tickwidth=1, range=[xmin_dec, xmax_dec])
-        fig.update_yaxes(title="Nombre de trajets", ticks="outside", ticklen=6, tickwidth=1, tickformat=".0f", separatethousands=True)
-        if y_max is not None:
-            fig.update_yaxes(range=[0, float(y_max)])
-        fig.update_layout(margin=dict(l=10, r=10, t=60, b=10), bargap=0.03, bargroupgap=0, title=f"Répartition du nombre de trajets en fonction de {col} sous forme d'histogramme")
-        return fig
-    if s.empty:
-        return px.histogram()
 
-    # axe x en échelle LOG
-    base_min = s.min()
-    base_max = s.max()
-    if x_min is not None:
-        base_min = min(float(x_min), base_min)
-    if x_max is not None:
-        base_max = max(float(x_max), base_max)
-    xmin = int(np.floor(np.log10(base_min)))
-    xmax = int(np.ceil(np.log10(base_max)))
+        tick_lo = int(np.floor(np.log10(range_min)))
+        tick_hi = int(np.ceil(np.log10(range_max)))
+        tickvals = [10**k for k in range(tick_lo, tick_hi + 1)]
 
-    edges = np.logspace(xmin, xmax, NBINS + 1)      # [lo0, lo1, ... hiN]
-    counts, _ = np.histogram(s.values, bins=edges)
+        def format_num(x: float) -> str:
+            if x >= 1000:
+                return f"{x:,.0f}".replace(",", " ")
+            if x >= 1:
+                return f"{x:.0f}"
+            return f"{x:.3g}"
 
-    widths = edges[1:] - edges[:-1]
-    mid = np.sqrt(edges[:-1] * edges[1:])
+        ticktext = [format_num(v) for v in tickvals]
 
-    # bar chart + hover en valeurs brutes (intervalle)
-    fig = px.bar(x=mid, y=counts, labels={"x": col, "y": "Nombre de trajets"})
-    fig.update_traces(
-        customdata=np.c_[edges[:-1], edges[1:]],
-        hovertemplate=(
-            "value ∈ [%{customdata[0]:.3g}, %{customdata[1]:.3g}]<br>"
-            "count = %{y:.0f}<extra></extra>"
-        ),
-        width=widths,
-        marker_line_width=0,
-        opacity=0.95,
-    )
+        fig.update_xaxes(
+            type="log",
+            title=col + " (échelle log)",
+            tickmode="array",
+            tickvals=tickvals,
+            ticktext=ticktext,
+            ticks="outside",
+            ticklen=6,
+            tickwidth=1,
+            range=[np.log10(range_min), np.log10(range_max)]
+        )
+    else:
+        range_min = slider_min if slider_min is not None else float(s.min())
+        range_max = slider_max if slider_max is not None else float(s.max())
+        if range_max <= range_min:
+            range_max = range_min + 1e-9
 
-    tickvals = [10**k for k in range(xmin, xmax + 1)]
+        edges = np.linspace(range_min, range_max, NBINS + 1)
+        data_for_hist = s_filtered.values if not s_filtered.empty else np.array([])
+        counts, _ = np.histogram(data_for_hist, bins=edges)
 
-    def format_num(x: float) -> str:                      # 10**k -> "0.1", "1", "10", "1000", …
-        if x >= 1000:
-            return f"{x:,.0f}".replace(",", " ")       # séparateur de milliers
-        if x >= 1:
-            return f"{x:.0f}"
-        return f"{x:.3g}"
+        widths = edges[1:] - edges[:-1]
+        mid = (edges[:-1] + edges[1:]) / 2
 
-    ticktext = [format_num(v) for v in tickvals]
+        fig = px.bar(x=mid, y=counts, labels={"x": col, "y": "Nombre de trajets"})
+        fig.update_traces(
+            customdata=np.c_[edges[:-1], edges[1:]],
+            hovertemplate=(
+                "value ∈ [%{customdata[0]:.3g}, %{customdata[1]:.3g}]<br>"
+                "count = %{y:.0f}<extra></extra>"
+            ),
+            width=widths,
+            marker_line_width=0,
+            opacity=0.95,
+        )
 
-    fig.update_xaxes(
-        type="log",
-        title=col + " (échelle log)",
-        tickmode="array",
-        tickvals=tickvals,
-        ticktext=ticktext,
+        fig.update_xaxes(
+            type="linear",
+            title=col + " (échelle linéaire)",
+            ticks="outside",
+            ticklen=6,
+            tickwidth=1,
+            range=[range_min, range_max]
+        )
+
+    fig.update_yaxes(
+        title="Nombre de trajets",
         ticks="outside",
         ticklen=6,
         tickwidth=1,
-        range=[xmin, xmax]
-    )
-    fig.update_yaxes(
-        title="Nombre de trajets",
-        ticks="outside", 
-        ticklen=6, 
-        tickwidth=1,
         tickformat=".0f",
         separatethousands=True
-        )
-    if y_max is not None:
-        fig.update_yaxes(range=[0, float(y_max)])
+    )
     fig.update_layout(
         margin=dict(l=10, r=10, t=60, b=10),
         bargap=BARGAP,

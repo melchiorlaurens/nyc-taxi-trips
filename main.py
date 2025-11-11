@@ -80,9 +80,8 @@ def build_app():
 
     boroughs = sorted(zones_gdf["borough"].dropna().unique())
 
-    # Pré-calcul des bornes globales (x_min/x_max) et du y_max pour l'histogramme par variable
+    # Pré-calcul des bornes globales (x_min/x_max) pour l'histogramme par variable
     hist_bounds = {}
-    NBINS = 40
 
     def _clean_series(df_in: pd.DataFrame, col_in: str) -> pd.Series:
         s = pd.to_numeric(df_in.get(col_in), errors="coerce")
@@ -117,30 +116,15 @@ def build_app():
             gmax = vmax if gmax is None else max(gmax, vmax)
         if gmin is None or gmax is None or gmin <= 0:
             continue
-        xmin_dec = int(np.floor(np.log10(gmin)))
-        xmax_dec = int(np.ceil(np.log10(gmax)))
-        edges = np.logspace(xmin_dec, xmax_dec, NBINS + 1)
-        # Deuxième passe: y_max avec ces edges
-        ymax = 0
-        for ym in months:
-            dfm = _load_month_df(ym)
-            if col not in dfm.columns:
-                continue
-            s = _clean_series(dfm, col)
-            if s.empty:
-                continue
-            counts, _ = np.histogram(s.values, bins=edges)
-            if counts.size:
-                ymax = max(ymax, int(counts.max()))
-        hist_bounds[col] = dict(x_min=float(10 ** xmin_dec), x_max=float(10 ** xmax_dec), y_max=float(ymax))
+        hist_bounds[col] = dict(x_min=float(gmin), x_max=float(gmax))
 
     app = Dash(__name__)
     app.title = "Dashboard NYC Yellow Taxi"
 
-    app.layout = html.Div(style={"fontFamily":"Inter, system-ui", 
+    app.layout = html.Div(style={"fontFamily":"Inter, system-ui",
                                  "padding":"8px 12px"
                                  }, children=[
-        html.H1("Dashboard : NYC Yellow Taxi", 
+        html.H1("Dashboard : NYC Yellow Taxi",
                 style={"margin":"8px 0 4px"}
                 ),
         html.Div("Exécution : python main.py"),
@@ -156,14 +140,14 @@ def build_app():
             ], style={"marginBottom":"8px"}),
 
             html.Div([
-                html.Label("Métrique (carte)", 
-                           style={"fontWeight":"bold", 
+                html.Label("Métrique (carte)",
+                           style={"fontWeight":"bold",
                                   "marginBottom":"6px"
                                   }
                            ),
-                dcc.Dropdown(id="metric", 
-                             value="count", 
-                             clearable=False, 
+                dcc.Dropdown(id="metric",
+                             value="count",
+                             clearable=False,
                              style={"width":"320px"},
                             options=(
                                 [{"label":"Pickups (count)","value":"count"}] +
@@ -188,8 +172,8 @@ def build_app():
 
         # Histogramme
         html.Div([
-            html.Label("Veuillez choisir la variable à afficher sur l'histogramme : distance (en miles), le montant ($), ou le pourboire ($)", 
-                       style={"fontWeight":"bold", 
+            html.Label("Veuillez choisir la variable à afficher sur l'histogramme : distance (en miles), le montant ($), ou le pourboire ($)",
+                       style={"fontWeight":"bold",
                               "marginBottom":"6px"
                               }),
             dcc.Dropdown(
@@ -207,16 +191,46 @@ def build_app():
         "marginTop": "20px",
         "marginBottom": "10px"
         }),
-        dcc.Graph(id="hist", 
-                  style={"height":"80vh", 
+
+        # Scale controls for histogram
+        html.Div([
+            html.Div([
+                html.Label("Échelle de l'axe X"),
+                dcc.RadioItems(
+                    id="hist-scale-type",
+                    options=[
+                        {"label": "Logarithmique", "value": "log"},
+                        {"label": "Linéaire", "value": "linear"}
+                    ],
+                    value="log",
+                    inline=True
+                )
+            ], style={"marginBottom":"8px", "textAlign":"center"}),
+            html.Div([
+                html.Label("Plage de l'axe X (min - max)"),
+                dcc.RangeSlider(
+                    id="hist-range-slider",
+                    min=0,
+                    max=100,
+                    step=0.1,
+                    value=[0, 100],
+                    marks={},
+                    tooltip={"placement": "bottom", "always_visible": False},
+                    allowCross=False
+                )
+            ], style={"marginBottom":"8px"})
+        ], style={"marginBottom":"10px"}),
+
+        dcc.Graph(id="hist",
+                  style={"height":"80vh",
                          "marginBottom":"70px"
                          }),
 
         # Overlay fixe pour garder le slider visible pendant le scroll
         html.Div([
-            html.Label("Mois", 
-                       style={"fontWeight":"bold", 
-                              "textAlign":"center", 
+            html.Label("Mois",
+                       style={"fontWeight":"bold",
+                              "textAlign":"center",
                               "display":"block"
                               }),
             dcc.Slider(
@@ -225,15 +239,15 @@ def build_app():
                 max=len(months)-1,
                 step=1,
                 value=len(months)-1,
-                marks={i: {"label": m, 
-                           "style": {"whiteSpace": "nowrap", 
+                marks={i: {"label": m,
+                           "style": {"whiteSpace": "nowrap",
                                      "fontSize": "12px"
                                      }} for i, m in enumerate(months)},
                 included=False,
                 updatemode="drag",
             ),
-            html.Div(id="info", 
-                     style={"marginTop":"6px", 
+            html.Div(id="info",
+                     style={"marginTop":"6px",
                             "color":"#6b7280"
                             }),
         ], style={
@@ -276,19 +290,36 @@ def build_app():
         agg_month = agg_month.rename(columns={"PULocationID": "LocationID"})
         return make_map_figure(zones_gdf, agg_month, borough_filter, f"{label} — {current_month}")
 
+    @app.callback([Output("hist-range-slider", "min"),
+                   Output("hist-range-slider", "max"),
+                   Output("hist-range-slider", "value"),
+                   Output("hist-range-slider", "marks")],
+                  Input("hist-col", "value"))
+    def _update_range_slider(col):
+        # Calcule les bornes globales pour cette colonne (tous les mois)
+        bounds = hist_bounds.get(col)
+        if bounds:
+            data_min = bounds["x_min"]
+            data_max = bounds["x_max"]
+            marks = {data_min: f"{data_min:.2g}", data_max: f"{data_max:.2g}"}
+            return data_min, data_max, [data_min, data_max], marks
+        return 0, 100, [0, 100], {}
+
     @app.callback(Output("hist","figure"),
                   Input("hist-col","value"),
-                  Input("month-index","value"))
-    def _hist(col, month_idx):
+                  Input("month-index","value"),
+                  Input("hist-range-slider","value"),
+                  Input("hist-scale-type","value"))
+    def _hist(col, month_idx, range_val, scale_type):
         current_month = months[month_idx] if 0 <= month_idx < len(months) else months[-1]
         df_month = _load_month_df(current_month)
         if df_month.empty:
             df_month = pd.DataFrame(columns=[col])
-        bounds = hist_bounds.get(col)
-        if bounds:
-            fig = make_hist_figure(df_month, col, x_min=bounds["x_min"], x_max=bounds["x_max"], y_max=bounds["y_max"])
-        else:
-            fig = make_hist_figure(df_month, col)
+
+        xmin_filter = range_val[0] if range_val[0] > 0 else None
+        xmax_filter = range_val[1] if range_val[1] < float('inf') else None
+
+        fig = make_hist_figure(df_month, col, xmin_filter, xmax_filter, scale_type)
         fig.update_layout(title=(fig.layout.title.text or "Histogramme") + f" — {current_month}")
         return fig
 

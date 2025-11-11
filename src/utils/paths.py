@@ -18,14 +18,14 @@ DEFAULT_MONTH = 1
 # Supports cross-year ranges like [(2024, 12), (2025, 1)].
 # Default mirrors Jan–Mar 2025; adjust as needed.
 DEFAULT_PERIODS = [
-    (DEFAULT_YEAR, 1), 
-    (DEFAULT_YEAR, 2), 
-    (DEFAULT_YEAR, 3), 
-    (DEFAULT_YEAR, 4), 
-    (DEFAULT_YEAR, 5), 
-    (DEFAULT_YEAR, 6), 
-    (DEFAULT_YEAR, 7), 
-    (DEFAULT_YEAR, 8), 
+    (DEFAULT_YEAR, 1),
+    (DEFAULT_YEAR, 2),
+    (DEFAULT_YEAR, 3),
+    (DEFAULT_YEAR, 4),
+    (DEFAULT_YEAR, 5),
+    (DEFAULT_YEAR, 6),
+    (DEFAULT_YEAR, 7),
+    (DEFAULT_YEAR, 8),
     (DEFAULT_YEAR, 9)]
 
 # Standard output locations
