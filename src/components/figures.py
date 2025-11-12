@@ -48,6 +48,7 @@ def make_map_figure(
     agg_df: pd.DataFrame,
     borough_filter: Optional[Iterable[str]],
     metric_label: str,
+    color_range: Optional[tuple] = None,
 ):
     z = zones_gdf if not borough_filter else zones_gdf[zones_gdf["borough"].isin(list(borough_filter))]
     g = z.merge(agg_df, on="LocationID", how="left")
@@ -63,6 +64,7 @@ def make_map_figure(
         locations="LocationID",
         featureidkey="properties.LocationID",
         color="value",
+        range_color=color_range,
         hover_data=None,
         custom_data=["zone_display", "borough_display", "value_display"],
     )
@@ -83,6 +85,17 @@ def make_map_figure(
         template="plotly_dark",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
+        # Place la colorbar juste à droite de la carte
+        coloraxis_colorbar=dict(
+            title=metric_label,
+            x=0.80,             # plus près du centre que 1.0
+            xanchor="left",
+            y=0.5,
+            len=0.8,
+            thickness=30,
+            outlinewidth=0,
+            bgcolor="rgba(0,0,0,0)"
+        ),
     )
     return fig
 
@@ -92,6 +105,7 @@ def make_hist_figure(
     xmin_filter: Optional[float] = None,
     xmax_filter: Optional[float] = None,
     scale_type: str = "log",
+    display_label: Optional[str] = None,
 ):
     NBINS = 40
     BARGAP = 0.03
@@ -119,6 +133,8 @@ def make_hist_figure(
     if slider_max is not None:
         s_filtered = s_filtered[s_filtered <= slider_max]
 
+    label_txt = display_label if display_label else col
+
     if scale_type == "log":
         range_min = slider_min if slider_min is not None else float(s.min())
         range_max = slider_max if slider_max is not None else float(s.max())
@@ -133,7 +149,7 @@ def make_hist_figure(
         widths = edges[1:] - edges[:-1]
         mid = np.sqrt(edges[:-1] * edges[1:])
 
-        fig = px.bar(x=mid, y=counts, labels={"x": col, "y": "Nombre de trajets"})
+        fig = px.bar(x=mid, y=counts, labels={"x": label_txt, "y": "Nombre de trajets"})
         fig.update_traces(
             customdata=np.c_[edges[:-1], edges[1:]],
             hovertemplate=(
@@ -160,7 +176,7 @@ def make_hist_figure(
 
         fig.update_xaxes(
             type="log",
-            title=col + " (échelle log)",
+            title=label_txt + " (échelle log)",
             tickmode="array",
             tickvals=tickvals,
             ticktext=ticktext,
@@ -182,7 +198,7 @@ def make_hist_figure(
         widths = edges[1:] - edges[:-1]
         mid = (edges[:-1] + edges[1:]) / 2
 
-        fig = px.bar(x=mid, y=counts, labels={"x": col, "y": "Nombre de trajets"})
+        fig = px.bar(x=mid, y=counts, labels={"x": label_txt, "y": "Nombre de trajets"})
         fig.update_traces(
             customdata=np.c_[edges[:-1], edges[1:]],
             hovertemplate=(
@@ -196,7 +212,7 @@ def make_hist_figure(
 
         fig.update_xaxes(
             type="linear",
-            title=col + " (échelle linéaire)",
+            title=label_txt + " (échelle linéaire)",
             ticks="outside",
             ticklen=6,
             tickwidth=1,
@@ -215,9 +231,8 @@ def make_hist_figure(
         margin=dict(l=10, r=10, t=60, b=10),
         bargap=BARGAP,
         bargroupgap=0,
-        title=f"Répartition du nombre de trajets en fonction de {col} sous forme d'histogramme",
+        title=f"Répartition du nombre de trajets en fonction de {label_txt} sous forme d'histogramme",
         template="plotly_dark",
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)"
     )
     return fig

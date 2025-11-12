@@ -120,6 +120,40 @@ def build_app():
             continue
         hist_bounds[col] = dict(x_min=float(gmin), x_max=float(gmax))
 
+    # Pré-calcul des bornes de couleurs pour la carte, par métrique (fixes à travers les mois)
+    map_color_ranges = {}
+
+    # Count (toujours présent)
+    max_count = 0
+    for ym in months:
+        dfm = _load_month_df(ym)
+        if "PULocationID" not in dfm.columns or dfm.empty:
+            continue
+        s = dfm["PULocationID"].value_counts()
+        if not s.empty:
+            max_count = max(max_count, int(s.max()))
+    if max_count > 0:
+        map_color_ranges["count"] = (0.0, float(max_count))
+
+    # Moyennes pour autres colonnes numériques
+    for metric in ["trip_distance", "fare_amount", "tip_amount"]:
+        if metric not in cols_available:
+            continue
+        gmin, gmax = None, None
+        for ym in months:
+            dfm = _load_month_df(ym)
+            if metric not in dfm.columns or "PULocationID" not in dfm.columns or dfm.empty:
+                continue
+            grp = dfm.groupby("PULocationID", dropna=False)[metric].mean()
+            if grp.empty:
+                continue
+            vmin = float(grp.min())
+            vmax = float(grp.max())
+            gmin = vmin if gmin is None else min(gmin, vmin)
+            gmax = vmax if gmax is None else max(gmax, vmax)
+        if gmin is not None and gmax is not None and gmax > gmin:
+            map_color_ranges[metric] = (gmin, gmax)
+
     app = Dash(__name__)
     app.title = "Dashboard NYC Yellow Taxi"
 
@@ -232,7 +266,11 @@ def build_app():
                                }
                            ),
                 dcc.Dropdown(id="hist-col",
-                             options=[{"label": c, "value": c} for c in numeric_hist_cols] or [{"label":"(aucune)","value":"_none"}],
+                             options=(
+                                 ([{"label":"Distance moyenne (mi)","value":"trip_distance"}] if "trip_distance" in numeric_hist_cols else []) +
+                                 ([{"label":"Montant moyen ($)","value":"fare_amount"}] if "fare_amount" in numeric_hist_cols else []) +
+                                 ([{"label":"Pourboire moyen ($)","value":"tip_amount"}] if "tip_amount" in numeric_hist_cols else [])
+                             ) or [{"label":"(aucune)","value":"_none"}],
                              value=("trip_distance" if "trip_distance" in numeric_hist_cols else (numeric_hist_cols[0] if numeric_hist_cols else "_none")),
                              clearable=False,
                              style={"width":"320px"}
@@ -354,7 +392,7 @@ def build_app():
             "count":"Pickups",
             "trip_distance":"Distance moyenne (mi)",
             "fare_amount":"Montant moyen ($)",
-            "tip_amount":"Pourboire moyen ($)",
+            "tip_amount":"Pourboire moyen ($)"
         }.get(metric, "Valeur")
         current_month = months[month_idx] if 0 <= month_idx < len(months) else months[-1]
         df_month = _load_month_df(current_month)
@@ -367,7 +405,13 @@ def build_app():
         else:
             agg_month = df_month.value_counts("PULocationID").rename("value").reset_index()
         agg_month = agg_month.rename(columns={"PULocationID": "LocationID"})
-        return make_map_figure(zones_gdf, agg_month, borough_filter, f"{label} — {current_month}")
+        return make_map_figure(
+            zones_gdf,
+            agg_month,
+            borough_filter,
+            f"{label} — {current_month}",
+            color_range=map_color_ranges.get(metric),
+        )
 
     @app.callback([Output("hist-range-slider", "min"),
                    Output("hist-range-slider", "max"),
@@ -393,6 +437,13 @@ def build_app():
                     marks[i] = f"{10**i:.2g}"
             return log_min, log_max, [log_min, log_max], marks
         return 0, 2, [0, 2], {}
+
+    # Libellés lisibles pour histogramme
+    hist_label_for = {
+        "trip_distance": "Distance moyenne (mi)",
+        "fare_amount": "Montant moyen ($)",
+        "tip_amount": "Pourboire moyen ($)",
+    }
 
     @app.callback(Output("hist","figure"),
                   Input("hist-col","value"),
@@ -420,7 +471,8 @@ def build_app():
         else:
             xmax_filter = None
 
-        fig = make_hist_figure(df_month, col, xmin_filter, xmax_filter, scale_type)
+        display_label = hist_label_for.get(col, col)
+        fig = make_hist_figure(df_month, col, xmin_filter, xmax_filter, scale_type, display_label=display_label)
         fig.update_layout(title=(fig.layout.title.text or "Histogramme") + f" — {current_month}")
         return fig
 
