@@ -212,10 +212,3 @@ CLAUDECONTEXT.txt
 #Agents and LLMs
 AGENTS.md
 
-#tests
-test_app_launch.py
-test_full_roundtrip.py
-test_sqlite_roundtrip.py
-
-#READMES
-SQLITE_INTEGRATION.md

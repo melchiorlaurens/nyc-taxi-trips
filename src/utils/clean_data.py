@@ -14,9 +14,7 @@ from src.utils.paths import (
     clean_yellow_parquet_path,
     RAW_TAXI_ZONE_LOOKUP_CSV,
     CLEAN_TAXI_ZONE_LOOKUP_CSV,
-    SQLITE_DB_PATH,
 )
-from src.database.sqlite_ops import export_sqlite_to_pandas, get_table_info
 
 
 class OutlierThresholds(BaseModel):
@@ -74,113 +72,22 @@ def make_geojson(raw_dir: Path, clean_dir: Path) -> Path:
     return to_geojson_wgs84(gdf, CLEAN_TAXI_ZONES_GEOJSON)
 
 
-def make_yellow_clean(raw_dir: Path, clean_dir: Path, use_sqlite: bool = True) -> Path:
+def make_yellow_clean(raw_dir: Path, clean_dir: Path) -> Path:
     """
-    Load the yellow trip data and write the cleaned parquet files.
+    Load the yellow trip parquet files found in raw_dir and write the cleaned parquet.
 
-    The data is loaded from SQLite database (if use_sqlite=True) or from parquet files.
     The cleaning includes: concatenate all matching files, keep the columns used by
     the dashboard, drop rows missing the pickup zone, and filter outliers.
-
-    Args:
-        raw_dir: Directory containing raw parquet files (used as fallback)
-        clean_dir: Directory where cleaned files will be written
-        use_sqlite: If True, read from SQLite database; if False, read from parquet files
-
-    Returns:
-        Path to the directory containing cleaned monthly parquet files
     """
+    parquet_files = sorted(raw_dir.glob("yellow_tripdata_*.parquet"))
+    if not parquet_files:
+        raise FileNotFoundError(f"Aucun fichier yellow_tripdata_*.parquet dans {raw_dir}")
+
     # Assure le répertoire des nettoyés mensuels
     CLEAN_YELLOW_MONTHLY_DIR.mkdir(parents=True, exist_ok=True)
 
     # Initialize outlier thresholds
     thresholds = OutlierThresholds()
-
-    # Determine data source
-    if use_sqlite and SQLITE_DB_PATH.exists():
-        db_info = get_table_info(SQLITE_DB_PATH)
-        if db_info.get("exists"):
-            print("[Cleaning] Reading data from SQLite database...")
-            return _make_yellow_clean_from_sqlite(thresholds)
-
-    # Fallback to parquet files
-    print("[Cleaning] Reading data from parquet files...")
-    return _make_yellow_clean_from_parquet(raw_dir, thresholds)
-
-
-def _make_yellow_clean_from_sqlite(thresholds: OutlierThresholds) -> Path:
-    """
-    Load data from SQLite and create cleaned monthly parquet files.
-
-    Args:
-        thresholds: Outlier filtering thresholds
-
-    Returns:
-        Path to the directory containing cleaned monthly parquet files
-    """
-    # Export all data from SQLite
-    df_all = export_sqlite_to_pandas(SQLITE_DB_PATH, table_name="yellow_tripdata")
-
-    if df_all.empty:
-        print("[Cleaning] No data found in SQLite database")
-        return CLEAN_YELLOW_MONTHLY_DIR
-
-    # Process columns
-    required_columns: Iterable[str] = [
-        "tpep_pickup_datetime",
-        "PULocationID",
-        "trip_distance",
-        "fare_amount",
-        "tip_amount",
-        "passenger_count",
-    ]
-    existing_cols = [c for c in required_columns if c in df_all.columns]
-    if existing_cols:
-        df_all = df_all[existing_cols]
-
-    if "tpep_pickup_datetime" in df_all.columns:
-        df_all["tpep_pickup_datetime"] = pd.to_datetime(df_all["tpep_pickup_datetime"], errors="coerce")
-        df_all["year_month"] = df_all["tpep_pickup_datetime"].dt.to_period("M").astype(str)
-
-    df_all = df_all.dropna(subset=["PULocationID"]).copy()
-    df_all["PULocationID"] = df_all["PULocationID"].astype("Int64")
-
-    # Filter outliers on the entire dataset
-    df_all = filter_outliers(df_all, thresholds)
-
-    # Split by month and save individual monthly files
-    if "year_month" in df_all.columns:
-        for ym in df_all["year_month"].unique():
-            if pd.isna(ym):
-                continue
-            try:
-                year = int(str(ym).split("-")[0])
-                month = int(str(ym).split("-")[1])
-                dfm = df_all[df_all["year_month"] == ym]
-                monthly_path = clean_yellow_parquet_path(year, month)
-                dfm.to_parquet(monthly_path, index=False)
-                print(f"[Cleaning] Saved {len(dfm):,} cleaned rows for {ym}")
-            except Exception as e:
-                print(f"[Cleaning] Error processing {ym}: {e}")
-                continue
-
-    return CLEAN_YELLOW_MONTHLY_DIR
-
-
-def _make_yellow_clean_from_parquet(raw_dir: Path, thresholds: OutlierThresholds) -> Path:
-    """
-    Load data from parquet files and create cleaned monthly parquet files.
-
-    Args:
-        raw_dir: Directory containing raw parquet files
-        thresholds: Outlier filtering thresholds
-
-    Returns:
-        Path to the directory containing cleaned monthly parquet files
-    """
-    parquet_files = sorted(raw_dir.glob("yellow_tripdata_*.parquet"))
-    if not parquet_files:
-        raise FileNotFoundError(f"Aucun fichier yellow_tripdata_*.parquet dans {raw_dir}")
 
     monthly_frames = []
     for path in parquet_files:
