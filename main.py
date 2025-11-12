@@ -3,12 +3,11 @@ import pandas as pd
 import numpy as np
 from functools import lru_cache
 import geopandas as gpd
-from dash import Dash, dcc, html, Input, Output, State
-import plotly.express as px
+from dash import Dash, dcc, html, Input, Output
 
 from src.utils.get_data import download_months, download_assets
 from src.utils.clean_data import make_geojson, make_yellow_clean, make_zone_lookup
-from src.components.figures import make_map_figure, make_hist_figure
+from src.components.figures import make_map_figure, make_hist_figure, make_box_figure
 from src.utils.paths import (
     RAW_DATA_DIR,
     CLEAN_DATA_DIR,
@@ -63,11 +62,7 @@ def build_app():
     zones_gdf = gpd.read_file(CLEAN_TAXI_ZONES_GEOJSON)
     # Déterminer les mois disponibles à partir des fichiers nettoyés mensuels
     monthly_paths = sorted(CLEAN_YELLOW_MONTHLY_DIR.glob("yellow_clean_*.parquet"))
-    months_all: list[str] = []
-    for p in monthly_paths:
-        ym = p.name.replace(".parquet", "").split("_")[-1]
-        months_all.append(ym)
-    months_all = sorted(set(months_all))
+    months_all = sorted({p.name.replace(".parquet", "").split("_")[-1] for p in monthly_paths})
     configured = [f"{y}-{m:02d}" for y, m in DEFAULT_PERIODS]
     months = [m for m in months_all if m in configured] or months_all or ["(indéfini)"]
 
@@ -81,6 +76,15 @@ def build_app():
         numeric_hist_cols = []
 
     boroughs = sorted(zones_gdf["borough"].dropna().unique())
+    # Lookup borough ← LocationID, typé pour des maps rapides
+    _bdf = zones_gdf[["LocationID", "borough"]].copy()
+    _bdf["LocationID"] = pd.to_numeric(_bdf["LocationID"], errors="coerce").astype("Int64")
+    borough_lookup = (
+        _bdf.dropna(subset=["LocationID", "borough"])  # assure des clés/valeurs valides
+            .drop_duplicates(subset=["LocationID"], keep="first")  # index unique
+            .set_index("LocationID")["borough"]
+    )
+    borough_map = borough_lookup.to_dict()
 
     # Pré-calcul des bornes globales (x_min/x_max) pour l'histogramme par variable
     hist_bounds = {}
@@ -334,6 +338,14 @@ def build_app():
                           }
                       ),
 
+            # Box plot — même variable et filtres que l'histogramme
+            dcc.Graph(id="box",
+                      style={
+                          "height":"60vh",
+                          "marginBottom":"90px"
+                          }
+                      ),
+
             html.Div(style={"height":"60px"}), # permet de décaler le contenu au-dessus du slider fixe
 
             # Overlay fixe pour garder le slider visible pendant le scroll
@@ -474,6 +486,51 @@ def build_app():
         display_label = hist_label_for.get(col, col)
         fig = make_hist_figure(df_month, col, xmin_filter, xmax_filter, scale_type, display_label=display_label)
         fig.update_layout(title=(fig.layout.title.text or "Histogramme") + f" — {current_month}")
+        return fig
+
+    @app.callback(Output("box", "figure"),
+                  Input("hist-col","value"),
+                  Input("month-index","value"),
+                  Input("hist-range-slider","value"),
+                  Input("hist-scale-type","value"))
+    def _box(col, month_idx, range_val, scale_type):
+        current_month = months[month_idx] if 0 <= month_idx < len(months) else months[-1]
+        df_month = _load_month_df(current_month)
+        if df_month.empty:
+            df_month = pd.DataFrame(columns=[col])
+
+        xmin_filter = 10**range_val[0] if range_val and range_val[0] is not None else None
+        xmax_filter = 10**range_val[1] if range_val and range_val[1] is not None else None
+
+        # Ajoute le borough comme groupe pour des box plots multiples (horizontaux)
+        df_month = df_month.copy()
+        # Cherche la colonne pickup zone la plus probable
+        pickup_candidates = [
+            "PULocationID", "PUlocationID", "puLocationID",
+            "pickup_location_id", "pickup_zone_id"
+        ]
+        pickup_col = next((c for c in pickup_candidates if c in df_month.columns), None)
+        if pickup_col is not None:
+            pu = pd.to_numeric(df_month[pickup_col], errors="coerce").astype("Int64")
+            df_month["borough"] = pu.map(borough_map).astype("string").str.strip().fillna("Unknown")
+        else:
+            df_month["borough"] = "Unknown"
+
+        display_label = hist_label_for.get(col, col)
+        # Ordre fixe des boroughs pour l'affichage
+        fixed_order = ["Manhattan", "Brooklyn", "Queens", "Bronx", "Staten Island"]
+        fig = make_box_figure(
+            df_month,
+            col,
+            xmin_filter,
+            xmax_filter,
+            scale_type,
+            display_label=display_label,
+            group_col="borough",
+            max_groups=len(fixed_order),
+            y_order=fixed_order,
+        )
+        fig.update_layout(title=(fig.layout.title.text or "Box plot") + f" — {current_month}")
         return fig
 
     @app.callback(Output("slider-display", "children"),

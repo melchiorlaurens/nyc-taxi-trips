@@ -13,7 +13,6 @@ RAW_TAXI_ZONE_LOOKUP_CSV = RAW_DATA_DIR / "taxi_zone_lookup.csv"
 
 # Defaults for downloads / processing
 DEFAULT_YEAR = 2025
-DEFAULT_MONTH = 1
 # Explicit list of (year, month) periods used by downloads and UI filtering.
 # Supports cross-year ranges like [(2024, 12), (2025, 1)].
 # Default mirrors Jan–Mar 2025; adjust as needed.
