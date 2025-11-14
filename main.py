@@ -8,6 +8,7 @@ from dash import Dash, dcc, html, Input, Output
 from src.utils.get_data import download_months, download_assets
 from src.utils.clean_data import make_geojson, make_yellow_clean, make_zone_lookup
 from src.components.figures import make_map_figure, make_hist_figure, make_box_figure
+from src.database import sync_sqlite_database
 from src.utils.paths import (
     RAW_DATA_DIR,
     CLEAN_DATA_DIR,
@@ -32,14 +33,18 @@ def ensure_clean():
 
     CLEAN_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+    from pathlib import Path as _P
+    raw_files = sorted(_P(RAW_DATA_DIR).glob("yellow_tripdata_*.parquet"))
+    if raw_files:
+        print("[info] Synchronisation de la base SQLite…")
+        sync_sqlite_database(raw_files)
+
     # Shapefile/lookup: générer si manquants
     if not CLEAN_TAXI_ZONES_GEOJSON.exists():
         make_geojson(RAW_DATA_DIR, CLEAN_DATA_DIR)
     if not CLEAN_TAXI_ZONE_LOOKUP_CSV.exists():
         make_zone_lookup(RAW_DATA_DIR, CLEAN_DATA_DIR)
     # Nettoyés mensuels: reconstruire si des bruts plus récents existent ou si des sorties manquent
-    from pathlib import Path as _P
-    raw_files = sorted(_P(RAW_DATA_DIR).glob("yellow_tripdata_*.parquet"))
     needs_yellow = not CLEAN_YELLOW_MONTHLY_DIR.exists()
     if not needs_yellow:
         for p in raw_files:

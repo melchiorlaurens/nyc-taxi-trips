@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, List
 
 import pandas as pd
 from pydantic import BaseModel, Field
 
 from src.utils.common_functions import load_shapefile, to_geojson_wgs84
+from src.database import read_month_from_sqlite
 from src.utils.paths import (
     TAXI_ZONES_SHP,
     CLEAN_TAXI_ZONES_GEOJSON,
@@ -14,6 +15,8 @@ from src.utils.paths import (
     clean_yellow_parquet_path,
     RAW_TAXI_ZONE_LOOKUP_CSV,
     CLEAN_TAXI_ZONE_LOOKUP_CSV,
+    DEFAULT_PERIODS,
+    SQLITE_DB_PATH,
 )
 
 
@@ -72,6 +75,16 @@ def make_geojson(raw_dir: Path, clean_dir: Path) -> Path:
     return to_geojson_wgs84(gdf, CLEAN_TAXI_ZONES_GEOJSON)
 
 
+REQUIRED_COLUMNS: Iterable[str] = (
+    "tpep_pickup_datetime",
+    "PULocationID",
+    "trip_distance",
+    "fare_amount",
+    "tip_amount",
+    "passenger_count",
+)
+
+
 def make_yellow_clean(raw_dir: Path, clean_dir: Path) -> Path:
     """
     Load the yellow trip parquet files found in raw_dir and write the cleaned parquet.
@@ -79,17 +92,19 @@ def make_yellow_clean(raw_dir: Path, clean_dir: Path) -> Path:
     The cleaning includes: concatenate all matching files, keep the columns used by
     the dashboard, drop rows missing the pickup zone, and filter outliers.
     """
+    CLEAN_YELLOW_MONTHLY_DIR.mkdir(parents=True, exist_ok=True)
+    thresholds = OutlierThresholds()
+
+    if SQLITE_DB_PATH.exists():
+        return _make_yellow_clean_from_sqlite(thresholds)
+    return _make_yellow_clean_from_parquet(raw_dir, thresholds)
+
+
+def _make_yellow_clean_from_parquet(raw_dir: Path, thresholds: OutlierThresholds) -> Path:
     parquet_files = sorted(raw_dir.glob("yellow_tripdata_*.parquet"))
     if not parquet_files:
         raise FileNotFoundError(f"Aucun fichier yellow_tripdata_*.parquet dans {raw_dir}")
 
-    # Assure le répertoire des nettoyés mensuels
-    CLEAN_YELLOW_MONTHLY_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Initialize outlier thresholds
-    thresholds = OutlierThresholds()
-
-    monthly_frames = []
     for path in parquet_files:
         # Déduire (year, month) à partir du nom de fichier
         name = path.name
@@ -103,41 +118,52 @@ def make_yellow_clean(raw_dir: Path, clean_dir: Path) -> Path:
             year = month = None
 
         dfm = pd.read_parquet(path)
-
-        required_columns: Iterable[str] = [
-            "tpep_pickup_datetime",
-            "PULocationID",
-            "trip_distance",
-            "fare_amount",
-            "tip_amount",
-            "passenger_count",
-        ]
-        existing_cols = [c for c in required_columns if c in dfm.columns]
-        if existing_cols:
-            dfm = dfm[existing_cols]
-
-        if "tpep_pickup_datetime" in dfm.columns:
-            dfm["tpep_pickup_datetime"] = pd.to_datetime(dfm["tpep_pickup_datetime"], errors="coerce")
-            dfm["year_month"] = dfm["tpep_pickup_datetime"].dt.to_period("M").astype(str)
-
-        dfm = dfm.dropna(subset=["PULocationID"]).copy()
-        dfm["PULocationID"] = dfm["PULocationID"].astype("Int64")
-
-        # Filter outliers
-        dfm = filter_outliers(dfm, thresholds)
+        dfm = _clean_frame(dfm, thresholds)
 
         # Écrit un parquet nettoyé mensuel si (year, month) reconnu
         if year is not None and month is not None:
             monthly_path = clean_yellow_parquet_path(year, month)
             dfm.to_parquet(monthly_path, index=False)
 
-        monthly_frames.append(dfm)
-
-    # Concatène et écrit le parquet global combiné pour la simplicité du dashboard
-    df = pd.concat(monthly_frames, ignore_index=True)
-
     # Retourne le répertoire contenant les nettoyés mensuels
     return CLEAN_YELLOW_MONTHLY_DIR
+
+
+def _make_yellow_clean_from_sqlite(thresholds: OutlierThresholds) -> Path:
+    monthly_frames: List[pd.DataFrame] = []
+    for year, month in DEFAULT_PERIODS:
+        dfm = read_month_from_sqlite(year, month)
+        if dfm.empty:
+            continue
+        dfm = _clean_frame(dfm, thresholds)
+        monthly_path = clean_yellow_parquet_path(year, month)
+        dfm.to_parquet(monthly_path, index=False)
+        monthly_frames.append(dfm)
+
+    if not monthly_frames:
+        raise FileNotFoundError("Aucune donnée mensuelle issue de la base SQLite.")
+
+    return CLEAN_YELLOW_MONTHLY_DIR
+
+
+def _clean_frame(dfm: pd.DataFrame, thresholds: OutlierThresholds) -> pd.DataFrame:
+    """Apply the base cleaning rules shared across sources."""
+    existing_cols = [c for c in REQUIRED_COLUMNS if c in dfm.columns]
+    if existing_cols:
+        dfm = dfm[existing_cols].copy()
+    else:
+        dfm = dfm.copy()
+
+    if "tpep_pickup_datetime" in dfm.columns:
+        dfm["tpep_pickup_datetime"] = pd.to_datetime(dfm["tpep_pickup_datetime"], errors="coerce")
+        dfm["year_month"] = dfm["tpep_pickup_datetime"].dt.to_period("M").astype(str)
+
+    if "PULocationID" in dfm.columns:
+        dfm = dfm.dropna(subset=["PULocationID"])
+        dfm["PULocationID"] = pd.to_numeric(dfm["PULocationID"], errors="coerce").astype("Int64")
+
+    dfm = filter_outliers(dfm, thresholds)
+    return dfm
 
 
 def make_zone_lookup(raw_dir: Path, clean_dir: Path) -> Path:

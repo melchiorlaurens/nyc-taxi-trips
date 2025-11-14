@@ -7,9 +7,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = PROJECT_ROOT / "data"
 RAW_DATA_DIR = DATA_DIR / "raw"
 CLEAN_DATA_DIR = DATA_DIR / "cleaned"
+DATABASE_DIR = DATA_DIR / "database"
 TAXI_ZONES_DIR = PROJECT_ROOT / "taxi_zones"
 TAXI_ZONES_SHP = TAXI_ZONES_DIR / "taxi_zones.shp"
 RAW_TAXI_ZONE_LOOKUP_CSV = RAW_DATA_DIR / "taxi_zone_lookup.csv"
+SQLITE_DB_PATH = DATABASE_DIR / "yellow_raw.sqlite"
 
 # Defaults for downloads / processing
 DEFAULT_YEAR = 2025

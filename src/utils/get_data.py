@@ -50,6 +50,12 @@ def download_months(periods: Iterable[Tuple[int, int]]) -> List[Path]:
 # Note: callers should pass explicit periods, e.g. DEFAULT_PERIODS
 
 
+def download_month(year: int, month: int) -> Path:
+    """Convenience wrapper to download a single month."""
+    results = download_months([(year, month)])
+    return results[0]
+
+
 def download_assets() -> Path:
     """
     Download the taxi zones zip into the raw folder and extract it locally.
