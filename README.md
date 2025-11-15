@@ -1,7 +1,7 @@
 # NYC Taxi Trips Dashboard
 
 **Authors:** Théo Phan, Melchior Laurens
-**Project:** Data E4 DSIA
+**Project:** ESIEE'S Paris Python course - E4 DSIA class
 
 An interactive dashboard for exploring NYC yellow taxi trip patterns through maps, histograms, and statistical visualizations.
 
