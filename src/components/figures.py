@@ -208,7 +208,7 @@ def make_hist_figure(
         widths = edges[1:] - edges[:-1]
         mid = (edges[:-1] + edges[1:]) / 2
 
-        fig = px.bar(x=mid, y=counts, labels={"x": label_txt, "y": "Nombre de trajets"})
+        fig = px.bar(x=mid, y=counts, labels={"x": label_txt, "y": "Trip count"})
         # Prepare shared parameters for a single trace update
         _customdata = np.c_[edges[:-1], edges[1:]]
         _widths = widths

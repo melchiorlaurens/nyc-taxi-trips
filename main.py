@@ -239,10 +239,6 @@ def build_app():
                     "The objective is to give both a spatial and statistical overview: where activity concentrates across the city and "
                     "how distances, fares and tips are distributed. Use the month slider at the bottom to focus on any month between "
                     "January and September 2025.",
-                ),
-                html.P(
-                    "When running `python main.py`, the raw files are downloaded from the TLC source, cleaned and prepared automatically "
-                    "the first time the script is executed (see the source code for details)."
                 )
             ], style={
                 "maxWidth":"920px",
