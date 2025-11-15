@@ -64,7 +64,7 @@ def ensure_clean():
         make_yellow_clean(RAW_DATA_DIR, CLEAN_DATA_DIR)
         cleaned_files = sorted(CLEAN_YELLOW_MONTHLY_DIR.glob("yellow_clean_*.parquet"))
         print(f"[info] Cleaned {len(cleaned_files)} months of data")
-    print("[info] Data preparation complete. Ready to launch dashboard.")
+    print("[info] Data preparation complete. Ready to launch dashboard. Thanks for waiting !")
 
 
 def build_app():
@@ -600,4 +600,4 @@ def build_app():
 if __name__ == "__main__":
     ensure_clean()
     app = build_app()
-    app.run(debug=True)
+    app.run(debug=True, use_reloader=False)
