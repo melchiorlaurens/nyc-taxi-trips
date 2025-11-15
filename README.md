@@ -283,6 +283,11 @@ People in Staten Island tip more than in other boroughs, and the values vary a l
 
 ---
 
+## Conclusion and perspectives
+This dashboard provides a clear, descriptive view of New York City yellow-taxi activity, where pickups concentrate across space and how distance, fare, and tip values are distributed, showing strong spatial contrasts between city center, famous/touristic neighborhoods, airports, business districts and characteristically skewed distributions with many short, low-fare trips and a long upper tail. 
+While these patterns are robust, they are not causal: results are limited by heterogeneous data quality and zone-level aggregation that can obscure time-of-day, weather, traffic, and event effects. Moving forward, we aim to go beyond description by modeling relationships between variables (e.g., explaining tipping with distance, fare, borough, and time, allowing for non-linear effects), enriching the dataset with external context (weather, major events, congestion), increasing temporal granularity (hourly/daily) to capture urban rhythms, and expanding the visuals with relational plots.
+
+---
 
 ## Copyright and Attribution
 
