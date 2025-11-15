@@ -1,2 +1,9 @@
-pytest
+dash
+geopandas
+numpy
+pandas
+plotly
 pydantic
+pyarrow
+pytest
+requests
