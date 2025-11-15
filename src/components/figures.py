@@ -37,7 +37,7 @@ def _format_hover_value(value: float, metric_label: str) -> str:
     return f"{_format_number(value, 2)} {metric_label.lower()}"
 
 def _build_hovertemplate() -> str:
-    # Affiche zone (ligne 1), borough (ligne 2 gris), valeur (ligne 3)
+    # Display zone (line 1), borough (line 2 gray), value (line 3)
     return (
         "<b>%{customdata[0]}</b><br>"
         "<span style='color:#9ca3af;'>%{customdata[1]}</span><br>"
@@ -102,10 +102,10 @@ def make_map_figure(
         template="plotly_dark",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        # Place la colorbar juste à droite de la carte
+        # Place the colorbar just to the right of the map
         coloraxis_colorbar=dict(
             title=metric_label,
-            x=0.80,             # plus près du centre que 1.0
+            x=0.80,             # closer to the center than 1.0
             xanchor="left",
             y=0.5,
             len=0.8,
@@ -167,7 +167,7 @@ def make_hist_figure(
         mid = np.sqrt(edges[:-1] * edges[1:])
 
         fig = px.bar(x=mid, y=counts, labels={"x": label_txt, "y": "Nombre de trajets"})
-        # Prépare les paramètres communs pour une seule mise à jour des traces
+        # Prepare shared parameters for a single trace update
         _customdata = np.c_[edges[:-1], edges[1:]]
         _widths = widths
         _counts = counts
@@ -209,7 +209,7 @@ def make_hist_figure(
         mid = (edges[:-1] + edges[1:]) / 2
 
         fig = px.bar(x=mid, y=counts, labels={"x": label_txt, "y": "Nombre de trajets"})
-        # Prépare les paramètres communs pour une seule mise à jour des traces
+        # Prepare shared parameters for a single trace update
         _customdata = np.c_[edges[:-1], edges[1:]]
         _widths = widths
         _counts = counts
@@ -233,7 +233,7 @@ def make_hist_figure(
             range=[range_min, range_max]
         )
 
-    # Applique une seule fois les paramètres communs aux barres
+    # Apply shared parameters to the bars once
     try:
         fig.update_traces(**trace_kwargs)
     except Exception:
@@ -267,7 +267,7 @@ def make_box_figure(
     exclude_groups: Optional[Iterable[str]] = ("Unknown",),
     y_order: Optional[Iterable[str]] = None,
 ):
-    """Box plot statique (axe X en log) pour la même variable que l'histogramme."""
+    """Static box plot (log-scale X axis) for the same variable as the histogram."""
     if col not in df.columns:
         return px.box()
 
@@ -278,20 +278,20 @@ def make_box_figure(
 
     label_txt = display_label if display_label else col
 
-    # Prépare DataFrame filtré (avec éventuelle colonne de groupe)
+    # Prepare filtered DataFrame (including optional group column)
     df_plot = df.copy()
-    df_plot[col] = s  # valeurs nettoyées
+    df_plot[col] = s  # cleaned values
 
-    # Si aucune ligne après filtre, créer figure vide
+    # If no rows remain after filtering, return an empty figure
     if df_plot.empty:
         return px.box()
 
-    # Horizontal: valeurs sur l'axe X, groupes sur Y (version agrégée pour performance)
+    # Horizontal: values on X axis, groups on Y (aggregated version for performance)
     if group_col and group_col in df_plot.columns:
         data = df_plot[[group_col, col]].dropna()
-        # Exclusion stricte de Unknown (comportement demandé)
+        # Strictly exclude Unknown (required behavior)
         data = data[data[group_col] != "Unknown"]
-        # Déterminer l'ordre: privilégier y_order s'il y a recouvrement, sinon top N présents
+        # Determine order: prefer y_order when overlapping, otherwise top N present
         present = list(data[group_col].unique())
         if y_order:
             order = [c for c in y_order if c in present]
@@ -305,7 +305,7 @@ def make_box_figure(
                 .index
                 .tolist()
             )
-        # Construire une trace par borough sélectionné
+        # Build a trace per selected borough
         fig = go.Figure()
         for name in order:
             vals = pd.to_numeric(data.loc[data[group_col] == name, col], errors="coerce").dropna()
@@ -317,7 +317,7 @@ def make_box_figure(
             q3 = np.quantile(vals, 0.75)
             low = float(vals.min())
             high = float(vals.max())
-            # Trace box sans hover (on overlay un scatter pour un hover propre sans nom de ville)
+            # Box trace without hover (overlay a scatter for clean hover without city name)
             fig.add_trace(go.Box(
                 name="",
                 y0=str(name),
@@ -342,7 +342,7 @@ def make_box_figure(
                 hovertemplate="%{text}<extra></extra>", text=[hover_txt],
                 showlegend=False,
             ))
-        # Si aucune trace n'a été ajoutée (toutes catégories exclues), renvoyer une figure vide annotée
+        # If no trace was added (all categories excluded), return an annotated empty figure
         if not fig.data:
             empty = go.Figure()
             empty.update_layout(
@@ -370,7 +370,7 @@ def make_box_figure(
         q3 = np.quantile(vals, 0.75)
         low = float(vals.min())
         high = float(vals.max())
-        # Trace box seule sans hover + overlay scatter pour hover custom
+        # Single box trace without hover (overlay scatter for custom hover)
         fig = go.Figure(go.Box(
             name="",
             orientation="h",
@@ -395,7 +395,7 @@ def make_box_figure(
             showlegend=False,
         ))
 
-    # Bornes d'axe X (valeurs) — statique en log
+    # X-axis bounds (values) — static in log scale
     data_min = max(float(df_plot[col].min()), 1e-12)
     data_max = float(df_plot[col].max())
     x_lo = data_min
@@ -418,7 +418,7 @@ def make_box_figure(
         showlegend=False,
     )
 
-    # Hoverlabel sobre, non incliné (aligné à gauche)
+    # Subtle, non-rotated hover label (left-aligned)
     fig.update_traces(
         hoverlabel=dict(
             bgcolor="#111",
