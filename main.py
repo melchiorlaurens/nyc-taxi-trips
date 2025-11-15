@@ -495,17 +495,12 @@ def build_app():
 
     @app.callback(Output("box", "figure"),
                   Input("hist-col","value"),
-                  Input("month-index","value"),
-                  Input("hist-range-slider","value"),
-                  Input("hist-scale-type","value"))
-    def _box(col, month_idx, range_val, scale_type):
+                  Input("month-index","value"))
+    def _box(col, month_idx):
         current_month = months[month_idx] if 0 <= month_idx < len(months) else months[-1]
         df_month = _load_month_df(current_month)
         if df_month.empty:
             df_month = pd.DataFrame(columns=[col])
-
-        xmin_filter = 10**range_val[0] if range_val and range_val[0] is not None else None
-        xmax_filter = 10**range_val[1] if range_val and range_val[1] is not None else None
 
         # Ajoute le borough comme groupe pour des box plots multiples (horizontaux)
         df_month = df_month.copy()
@@ -527,9 +522,9 @@ def build_app():
         fig = make_box_figure(
             df_month,
             col,
-            xmin_filter,
-            xmax_filter,
-            scale_type,
+            None,
+            None,
+            "log",
             display_label=display_label,
             group_col="borough",
             max_groups=len(fixed_order),
