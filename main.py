@@ -221,21 +221,31 @@ def build_app():
             # Présentation générale — à éditer
             html.Div([
                 html.H2("Contexte", style={"margin":"20px 0 0 0"}),
-                html.P(
-                    "Ce tableau de bord rassemble les principales métriques issues des fichiers publics yellow_tripdata. "
-                    "Il permet de situer les zones les plus sollicitées, d'explorer la distribution des distances ou montants, "
-                    "et de comparer les ordres de grandeur par arrondissement.",
+                html.P([
+                    "Ce dashboard explore l’activité des taxis jaunes de New York (Yellow Taxi) à partir des enregistrements mensuels publiés par la ",
+                    html.A("NYC Taxi & Limousine Commission (TLC)",
+                           href="https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page",
+                           target="_blank",
+                           rel="noopener noreferrer",
+                           style={"textDecoration": "underline",
+                                  "color": "#2563eb"
+                                  }),
+                    ". "
+                    "Chaque trajet comprend au moins une zone de prise en charge et de dépose (TLC zones), une distance en miles, un montant payé en dollars et, le cas échéant, un pourboire. ",
+                ],
                     style={"marginBottom":"8px"}
                 ),
                 html.P(
-                    "Adaptez le texte ci-dessus pour décrire votre cas d'usage (jeu de données, période couverte, objectifs). "
-                    "Le slider de mois synchronise toutes les visualisations; la checklist contrôle uniquement la carte.",
-                    style={"color":"#d1d5db"}
+                    "L’objectif est de proposer une lecture à la fois spatiale et statistique : où l’activité se concentre dans la ville et comment se répartissent les distances, montants et pourboires. "
+                    "Le slider en bas de page permet de sélectionner un mois entre janvier et septembre 2025 inclus. "
                 ),
+                html.P(
+                    "Lors de l'exécution avec 'python main.py', les données sont récupérés depuis le site souce, nettoyées et préparées automatiquement au premier lancement du script (voir le code source pour plus de détails). "
+                )
             ], style={
                 "maxWidth":"920px",
                 "margin":"0 auto 16px",
-                "color":"#e5e7eb",
+                "color":"#f3f4f6",
                 "lineHeight":"1.6"
             }),
 
@@ -244,15 +254,24 @@ def build_app():
             # Carte
             html.Div([
                 html.Div([
-                    html.H3("Comprendre la carte", style={"textAlign":"center",
-                                                          "fontSize":"22px"}),
+                    html.H3("Carte choroplèthe", style={"textAlign":"center",
+                                                          "fontSize":"22px"
+                                                          }),
                     html.P(
-                        "Sélectionnez une métrique pour colorer les zones de prise en charge. "
-                        "Survolez une zone pour voir son nom, l'arrondissement et la valeur correspondante. "
-                        "Utilisez ce paragraphe pour préciser ce que chaque métrique représente dans votre analyse.",
-                        style={"maxWidth":"900px","margin":"0 auto 40px","color":"#d1d5db","textAlign":"center"}
+                        "La carte choroplèthe représente les zones TLC colorées selon une métrique que vous choisissez dans le menu dédié : nombre de prises en charge (pickups), distance moyenne, montant moyen ou pourboire moyen. "
                     ),
-                ]),
+                    html.P(
+                        "Vous pouvez limiter l’affichage à un ou plusieurs boroughs pour focaliser l’analyse sur un territoire."
+                        ),
+                    html.P(
+                        "En survolant une zone, une infobulle indique son nom, son identifiant et la valeur exacte de la métrique. ",
+                    )
+                ], style={"maxWidth":"900px",
+                          "margin":"0 auto 40px",
+                          "color":"#d1d5db",
+                          "textAlign":"center"
+                          }
+                ),
                 html.Div([
                     html.Label("Métrique (carte)",
                                style={
