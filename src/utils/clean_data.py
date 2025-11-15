@@ -103,10 +103,11 @@ def make_yellow_clean(raw_dir: Path, clean_dir: Path) -> Path:
 def _make_yellow_clean_from_parquet(raw_dir: Path, thresholds: OutlierThresholds) -> Path:
     parquet_files = sorted(raw_dir.glob("yellow_tripdata_*.parquet"))
     if not parquet_files:
-        raise FileNotFoundError(f"Aucun fichier yellow_tripdata_*.parquet dans {raw_dir}")
+        raise FileNotFoundError(f"No yellow_tripdata_*.parquet files found in {raw_dir}")
 
+    cleaned_count = 0
     for path in parquet_files:
-        # Déduire (year, month) à partir du nom de fichier
+        # Extract (year, month) from filename
         name = path.name
         try:
             stem = name.replace(".parquet", "")
@@ -114,23 +115,26 @@ def _make_yellow_clean_from_parquet(raw_dir: Path, thresholds: OutlierThresholds
             year = int(ym.split("-")[0])
             month = int(ym.split("-")[1])
         except Exception:
-            # Si parsing échoue, continuer mais sans sortie mensuelle dédiée
+            # If parsing fails, skip but continue processing
             year = month = None
 
         dfm = pd.read_parquet(path)
         dfm = _clean_frame(dfm, thresholds)
 
-        # Écrit un parquet nettoyé mensuel si (year, month) reconnu
+        # Write cleaned monthly parquet if (year, month) was parsed successfully
         if year is not None and month is not None:
             monthly_path = clean_yellow_parquet_path(year, month)
             dfm.to_parquet(monthly_path, index=False)
+            cleaned_count += 1
 
-    # Retourne le répertoire contenant les nettoyés mensuels
+    print(f"Cleaned and saved {cleaned_count} months from parquet files")
+    # Return directory containing cleaned monthly files
     return CLEAN_YELLOW_MONTHLY_DIR
 
 
 def _make_yellow_clean_from_sqlite(thresholds: OutlierThresholds) -> Path:
     monthly_frames: List[pd.DataFrame] = []
+    cleaned_count = 0
     for year, month in DEFAULT_PERIODS:
         dfm = read_month_from_sqlite(year, month)
         if dfm.empty:
@@ -139,10 +143,12 @@ def _make_yellow_clean_from_sqlite(thresholds: OutlierThresholds) -> Path:
         monthly_path = clean_yellow_parquet_path(year, month)
         dfm.to_parquet(monthly_path, index=False)
         monthly_frames.append(dfm)
+        cleaned_count += 1
 
     if not monthly_frames:
-        raise FileNotFoundError("Aucune donnée mensuelle issue de la base SQLite.")
+        raise FileNotFoundError("No monthly data found in SQLite database.")
 
+    print(f"Cleaned and saved {cleaned_count} months from SQLite database")
     return CLEAN_YELLOW_MONTHLY_DIR
 
 
@@ -170,7 +176,7 @@ def make_zone_lookup(raw_dir: Path, clean_dir: Path) -> Path:
     """Clean the taxi zone lookup CSV and store the standardized version."""
     src = RAW_TAXI_ZONE_LOOKUP_CSV
     if not src.exists():
-        raise FileNotFoundError(f"Fichier introuvable : {src}")
+        raise FileNotFoundError(f"File not found: {src}")
 
     df = pd.read_csv(src)
 

@@ -42,10 +42,15 @@ def download_months(periods: Iterable[Tuple[int, int]]) -> List[Path]:
         download_months([(2025, 1), (2025, 2)])
     """
     destinations: List[Path] = []
-    for year, month in periods:
+    periods_list = list(periods)
+    print(f"Starting download of {len(periods_list)} months of taxi data...")
+    for i, (year, month) in enumerate(periods_list, 1):
         url = TRIPDATA_URL_TEMPLATE.format(year=year, month=month)
         dest = yellow_tripdata_path(year, month)
+        print(f"[{i}/{len(periods_list)}] Downloading {year}-{month:02d}...")
         destinations.append(_download_file(url, dest))
+        print(f"[{i}/{len(periods_list)}] Saved to {dest.name}")
+    print(f"Download complete: {len(destinations)} parquet files ready")
     return destinations
 # Note: callers should pass explicit periods, e.g. DEFAULT_PERIODS
 
@@ -62,9 +67,13 @@ def download_assets() -> Path:
 
     Returns the directory containing the shapefile parts.
     """
+    print("Downloading taxi zones shapefile...")
     zip_path = _download_file(TAXI_ZONES_URL, RAW_TAXI_ZONES_ZIP)
+    print(f"Extracting shapefile to {TAXI_ZONES_DIR}...")
     TAXI_ZONES_DIR.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(zip_path) as zf:
         zf.extractall(TAXI_ZONES_DIR)
+    print("Downloading taxi zone lookup table...")
     _download_file(TAXI_ZONE_LOOKUP_URL, RAW_TAXI_ZONE_LOOKUP_CSV)
+    print(f"Assets ready in {RAW_TAXI_ZONE_LOOKUP_CSV.parent}")
     return TAXI_ZONES_DIR

@@ -1,4 +1,4 @@
-# main.py — Tout-en-un minimal : prépare (si besoin) + lance la carte & l'histogramme
+# main.py — Minimal all-in-one: prepares data (if needed) and launches the dashboard
 import pandas as pd
 import numpy as np
 from functools import lru_cache
@@ -24,27 +24,29 @@ from src.utils.paths import (
 # ---------------------------------------
 
 def ensure_clean():
-    """Prépare les données si besoin et génère les fichiers cleaned attendus par le dashboard."""
-    print("[info] Analyse des données…")
+    """Prepares data if needed and generates cleaned files for the dashboard."""
+    print("[info] Preparing data…")
     RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
-    # Télécharge selon la config (si manquants)
-    download_months(DEFAULT_PERIODS)
+    # Download raw data (if missing)
+    downloaded_files = download_months(DEFAULT_PERIODS)
+    print(f"[info] Downloaded {len(downloaded_files)} parquet files")
     download_assets()
+    print("[info] Downloaded supporting assets (taxi zones, lookup table)")
 
     CLEAN_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     from pathlib import Path as _P
     raw_files = sorted(_P(RAW_DATA_DIR).glob("yellow_tripdata_*.parquet"))
     if raw_files:
-        print("[info] Synchronisation de la base SQLite…")
+        print("[info] Syncing SQLite database…")
         sync_sqlite_database(raw_files)
 
-    # Shapefile/lookup: générer si manquants
+    # Create geojson and lookup if missing
     if not CLEAN_TAXI_ZONES_GEOJSON.exists():
         make_geojson(RAW_DATA_DIR, CLEAN_DATA_DIR)
     if not CLEAN_TAXI_ZONE_LOOKUP_CSV.exists():
         make_zone_lookup(RAW_DATA_DIR, CLEAN_DATA_DIR)
-    # Nettoyés mensuels: reconstruire si des bruts plus récents existent ou si des sorties manquent
+    # Rebuild monthly cleaned files if raw data is newer or if outputs are missing
     needs_yellow = not CLEAN_YELLOW_MONTHLY_DIR.exists()
     if not needs_yellow:
         for p in raw_files:
@@ -58,20 +60,22 @@ def ensure_clean():
                 needs_yellow = True
                 break
     if needs_yellow:
-        print("[info] Nettoyage des fichiers parquets mensuels…")
+        print("[info] Cleaning and transforming monthly parquet files…")
         make_yellow_clean(RAW_DATA_DIR, CLEAN_DATA_DIR)
-    print("[info] Données nettoyées et prêtes à être utilisées.")
+        cleaned_files = sorted(CLEAN_YELLOW_MONTHLY_DIR.glob("yellow_clean_*.parquet"))
+        print(f"[info] Cleaned {len(cleaned_files)} months of data")
+    print("[info] Data preparation complete. Ready to launch dashboard.")
 
 
 def build_app():
     zones_gdf = gpd.read_file(CLEAN_TAXI_ZONES_GEOJSON)
-    # Déterminer les mois disponibles à partir des fichiers nettoyés mensuels
+    # Determine available months from cleaned monthly files
     monthly_paths = sorted(CLEAN_YELLOW_MONTHLY_DIR.glob("yellow_clean_*.parquet"))
     months_all = sorted({p.name.replace(".parquet", "").split("_")[-1] for p in monthly_paths})
     configured = [f"{y}-{m:02d}" for y, m in DEFAULT_PERIODS]
     months = [m for m in months_all if m in configured] or months_all or ["(indéfini)"]
 
-    # Lire un fichier mensuel pour déterminer les colonnes dispo
+    # Read a monthly file to determine available columns
     if monthly_paths:
         sample_df = pd.read_parquet(monthly_paths[-1])
         cols_available = set(sample_df.columns)
@@ -81,17 +85,17 @@ def build_app():
         numeric_hist_cols = []
 
     boroughs = sorted(zones_gdf["borough"].dropna().unique())
-    # Lookup borough ← LocationID, typé pour des maps rapides
+    # Borough lookup ← LocationID, typed for fast map lookups
     _bdf = zones_gdf[["LocationID", "borough"]].copy()
     _bdf["LocationID"] = pd.to_numeric(_bdf["LocationID"], errors="coerce").astype("Int64")
     borough_lookup = (
-        _bdf.dropna(subset=["LocationID", "borough"])  # assure des clés/valeurs valides
-            .drop_duplicates(subset=["LocationID"], keep="first")  # index unique
+        _bdf.dropna(subset=["LocationID", "borough"])  # ensures valid keys/values
+            .drop_duplicates(subset=["LocationID"], keep="first")  # unique index
             .set_index("LocationID")["borough"]
     )
     borough_map = borough_lookup.to_dict()
 
-    # Pré-calcul des bornes globales (x_min/x_max) pour l'histogramme par variable
+    # Pre-calculate global bounds (x_min/x_max) for histogram scaling by variable
     hist_bounds = {}
 
     def _clean_series(df_in: pd.DataFrame, col_in: str) -> pd.Series:
@@ -113,7 +117,7 @@ def build_app():
     for col in numeric_hist_cols:
         gmin = None
         gmax = None
-        # Première passe: bornes x
+        # First pass: calculate x bounds
         for ym in months:
             dfm = _load_month_df(ym)
             if col not in dfm.columns:
@@ -129,10 +133,10 @@ def build_app():
             continue
         hist_bounds[col] = dict(x_min=float(gmin), x_max=float(gmax))
 
-    # Pré-calcul des bornes de couleurs pour la carte, par métrique (fixes à travers les mois)
+    # Pre-calculate color bounds for map by metric (fixed across all months)
     map_color_ranges = {}
 
-    # Count (toujours présent)
+    # Count (always present)
     max_count = 0
     for ym in months:
         dfm = _load_month_df(ym)
@@ -144,7 +148,7 @@ def build_app():
     if max_count > 0:
         map_color_ranges["count"] = (0.0, float(max_count))
 
-    # Moyennes pour autres colonnes numériques
+    # Averages for other numeric columns
     for metric in ["trip_distance", "fare_amount", "tip_amount"]:
         if metric not in cols_available:
             continue
@@ -166,7 +170,7 @@ def build_app():
     app = Dash(__name__)
     app.title = "Dashboard NYC Yellow Taxi"
 
-    # Background image (if present) and dark theme base colors
+    # Load background image (if present) and apply dark theme
     import base64
     from pathlib import Path as _Path
     bg_style = {
@@ -187,8 +191,8 @@ def build_app():
             )
     except Exception:
         pass
-    
-    # Mise en page du dashboard
+
+    # Dashboard layout
     app.layout = html.Div(
         style={
             "fontFamily":"Rubik-Variable, system-ui, sans-serif",
@@ -441,7 +445,7 @@ def build_app():
             )
     ])  
 
-    # Callbacks
+    # Dashboard callbacks
     @app.callback(Output("map","figure"),
                   Input("metric","value"),
                   Input("borough-filter","value"),
@@ -456,7 +460,7 @@ def build_app():
         current_month = months[month_idx] if 0 <= month_idx < len(months) else months[-1]
         df_month = _load_month_df(current_month)
         if df_month.empty:
-            df_month = pd.DataFrame(columns=["PULocationID"])  # vide
+            df_month = pd.DataFrame(columns=["PULocationID"])  # empty
         if metric == "count":
             agg_month = df_month.value_counts("PULocationID").rename("value").reset_index()
         elif metric in df_month.columns:
@@ -478,7 +482,7 @@ def build_app():
                    Output("hist-range-slider", "marks")],
                   Input("hist-col", "value"))
     def _update_range_slider(col):
-        # Calcule les bornes globales pour cette colonne (tous les mois)
+        # Calculate global bounds for this column (all months)
         bounds = hist_bounds.get(col)
         if bounds:
             data_min = bounds["x_min"]
@@ -497,7 +501,7 @@ def build_app():
             return log_min, log_max, [log_min, log_max], marks
         return 0, 2, [0, 2], {}
 
-    # Libellés lisibles pour histogramme
+    # Readable labels for histogram
     hist_label_for = {
         "trip_distance": "Distance moyenne (mi)",
         "fare_amount": "Montant moyen ($)",
@@ -532,7 +536,7 @@ def build_app():
 
         display_label = hist_label_for.get(col, col)
         fig = make_hist_figure(df_month, col, xmin_filter, xmax_filter, scale_type, display_label=display_label)
-        fig.update_layout(title=(fig.layout.title.text or "Histogramme") + f" — {current_month}")
+        fig.update_layout(title=(fig.layout.title.text or "Histogram") + f" — {current_month}")
         return fig
 
     @app.callback(Output("box", "figure"),
@@ -544,9 +548,9 @@ def build_app():
         if df_month.empty:
             df_month = pd.DataFrame(columns=[col])
 
-        # Ajoute le borough comme groupe pour des box plots multiples (horizontaux)
+        # Add borough as grouping variable for multiple box plots (horizontal layout)
         df_month = df_month.copy()
-        # Cherche la colonne pickup zone la plus probable
+        # Find the pickup location column
         pickup_candidates = [
             "PULocationID", "PUlocationID", "puLocationID",
             "pickup_location_id", "pickup_zone_id"
@@ -559,7 +563,7 @@ def build_app():
             df_month["borough"] = "Unknown"
 
         display_label = hist_label_for.get(col, col)
-        # Ordre fixe des boroughs pour l'affichage
+        # Fixed order of boroughs for display
         fixed_order = ["Manhattan", "Brooklyn", "Queens", "Bronx", "Staten Island"]
         fig = make_box_figure(
             df_month,
@@ -580,7 +584,7 @@ def build_app():
         # Convert from log scale to linear scale
         min_val = 10**range_val[0]
         max_val = 10**range_val[1]
-        return f"Valeurs: {min_val:.3g} à {max_val:.3g}"
+        return f"Values: {min_val:.3g} to {max_val:.3g}"
 
     @app.callback(Output("info", "children"),
                   Input("month-index", "value"))
@@ -588,7 +592,7 @@ def build_app():
         current_month = months[month_idx] if 0 <= month_idx < len(months) else months[-1]
         dfm = _load_month_df(current_month)
         if dfm.empty:
-            return f"Aucune donnée disponible pour {current_month}."
+            return f"No data available for {current_month}."
         return ""
 
     return app
