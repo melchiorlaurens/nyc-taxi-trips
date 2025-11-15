@@ -1,5 +1,0 @@
-TPEP = Taxicab Passenger Enhancements Project
-TLC = Taxi & Limousine Commission
-CRS = Coordinate Reference System
-WGS84 = système de référence géodésique utilisé par le GPS. Il définit la forme de la Terre (ellipsoïde) et l’origine pour exprimer des positions
-EPSG:4326 = code EPSG du système de coordonnées qui utilise WGS84 + des coordonnées en degrés (latitude/longitude)
