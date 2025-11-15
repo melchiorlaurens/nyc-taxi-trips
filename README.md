@@ -280,6 +280,7 @@ Box Plot Analysis:
 For trip distance and fare amount, Queens comes first with about double the median value of Bronx and Queens, and Staten Island has its median being the middle of Bronx/Brooklyn and Queens. Manhattan has less than half the average value of Bronx and Brooklyn for its average trip distance and fare amount.
 
 People in Staten Island tip more than in other boroughs, and the values vary a lot between months; that can be explained with the low number of trips in Staten Island.
+
 ---
 
 
