@@ -325,14 +325,23 @@ def build_app():
             # Histogramme
             html.Div([
                 html.Div([
-                    html.H3("Comprendre l'histogramme", style={"textAlign":"center"}),
+                    html.H3("Histogramme et box plot", style={"textAlign":"center",
+                                                              "fontSize":"22px"
+                                                              }),
                     html.P(
-                        "Utilisez cette zone pour détailler ce que montrent l'histogramme et le box plot. "
-                        "Par exemple : l'histogramme reflète la distribution brute filtrable, tandis que le box plot, "
-                        "statique, sert de repère pour comparer visuellement les arrondissements.",
-                        style={"maxWidth":"900px","margin":"0 auto 12px","color":"#d1d5db","textAlign":"center"}
-                    )
-                ]),
+                        "L’histogramme montre la répartition globale de la variable continue sélectionnée (distance, montant ou pourboire). "
+                        "Grâce au slider de l'échelle X juste en dessous, l’axe des abscisses peut être affiché soit en échelle logarithmique, soit en échelle linéaire. De plus, le slider permet de sélectionner une plage de valeurs personnalisée de la variable pour avoir plus de détails (effet de zoom). "
+                        "Les valeurs affichées restent en unités réelles (miles ou dollars). "
+                    ),
+                    html.P(
+                        "Le box plot, qui est en revanche insensible au slider, complète cette vue en résumant la distribution de la variable par sa médiane, ses quartiles et ses valeurs maximum et minimum. "
+                        ),
+                ], style={"maxWidth":"900px",
+                          "margin":"0 auto 40px",
+                          "color":"#d1d5db",
+                          "textAlign":"center"
+                          }
+                ),
                 html.Label("Veuillez choisir la variable à afficher sur l'histogramme : distance (en miles), le montant ($), ou le pourboire ($)",
                            style={
                                "fontWeight":"bold",
@@ -379,7 +388,7 @@ def build_app():
                     }
                 ),
                 html.Div([
-                    html.Label("X axis range (min-max) - slider in log scale"),
+                    html.Label("X axis range (min-max) - slider in log scale", style={"textAlign":"center"}),
                     dcc.RangeSlider(id="hist-range-slider",
                                     min=0,
                                     max=2,
