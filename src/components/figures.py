@@ -37,9 +37,10 @@ def _format_hover_value(value: float, metric_label: str) -> str:
     return f"{_format_number(value, 2)} {metric_label.lower()}"
 
 def _build_hovertemplate() -> str:
-    # Affiche uniquement le nom de zone et la valeur formatée, sans la ligne du borough
+    # Affiche zone (ligne 1), borough (ligne 2 gris), valeur (ligne 3)
     return (
         "<b>%{customdata[0]}</b><br>"
+        "<span style='color:#9ca3af;'>%{customdata[1]}</span><br>"
         "%{customdata[2]}"
         "<extra></extra>"
     )
