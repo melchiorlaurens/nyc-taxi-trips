@@ -187,7 +187,8 @@ def build_app():
             )
     except Exception:
         pass
-
+    
+    # Mise en page du dashboard
     app.layout = html.Div(
         style={
             "fontFamily":"Rubik-Variable, system-ui, sans-serif",
@@ -195,11 +196,12 @@ def build_app():
             **bg_style,
             }, 
         children=[
+            html.Div(style={"height":"60px"}),
             html.H1("Dashboard : NYC Yellow Taxi",
                     style={
-                        "margin":"8px 0 4px",
+                        "margin":"0 0 4px",
                         "fontWeight":"800",
-                        "fontSize":"28px",
+                        "fontSize":"30px",
                         "textAlign":"center",
                         "color":"#f3f4f6",
                         }
@@ -212,10 +214,41 @@ def build_app():
                          "fontSize":"14px"
                          }
                     ),
-            html.Hr(),
+            # Présentation générale — à éditer
+            html.Div([
+                html.H2("Contexte", style={"margin":"20px 0 0 0"}),
+                html.P(
+                    "Ce tableau de bord rassemble les principales métriques issues des fichiers publics yellow_tripdata. "
+                    "Il permet de situer les zones les plus sollicitées, d'explorer la distribution des distances ou montants, "
+                    "et de comparer les ordres de grandeur par arrondissement.",
+                    style={"marginBottom":"8px"}
+                ),
+                html.P(
+                    "Adaptez le texte ci-dessus pour décrire votre cas d'usage (jeu de données, période couverte, objectifs). "
+                    "Le slider de mois synchronise toutes les visualisations; la checklist contrôle uniquement la carte.",
+                    style={"color":"#d1d5db"}
+                ),
+            ], style={
+                "maxWidth":"920px",
+                "margin":"0 auto 16px",
+                "color":"#e5e7eb",
+                "lineHeight":"1.6"
+            }),
+
+            html.Div(style={"height":"60px"}),
 
             # Carte
             html.Div([
+                html.Div([
+                    html.H3("Comprendre la carte", style={"textAlign":"center",
+                                                          "fontSize":"22px"}),
+                    html.P(
+                        "Sélectionnez une métrique pour colorer les zones de prise en charge. "
+                        "Survolez une zone pour voir son nom, l'arrondissement et la valeur correspondante. "
+                        "Utilisez ce paragraphe pour préciser ce que chaque métrique représente dans votre analyse.",
+                        style={"maxWidth":"900px","margin":"0 auto 40px","color":"#d1d5db","textAlign":"center"}
+                    ),
+                ]),
                 html.Div([
                     html.Label("Métrique (carte)",
                                style={
@@ -252,7 +285,7 @@ def build_app():
                                   value=boroughs, inline=True)
                     ], 
                     style={
-                        "margin":"10px 0",
+                        "margin":"20px 0",
                         "textAlign":"center"
                         }
                     ),
@@ -264,10 +297,19 @@ def build_app():
                           }
                       ),
 
-            html.Hr(),
+            html.Div(style={"height":"120px"}),
 
             # Histogramme
             html.Div([
+                html.Div([
+                    html.H3("Comprendre l'histogramme", style={"textAlign":"center"}),
+                    html.P(
+                        "Utilisez cette zone pour détailler ce que montrent l'histogramme et le box plot. "
+                        "Par exemple : l'histogramme reflète la distribution brute filtrable, tandis que le box plot, "
+                        "statique, sert de repère pour comparer visuellement les arrondissements.",
+                        style={"maxWidth":"900px","margin":"0 auto 12px","color":"#d1d5db","textAlign":"center"}
+                    )
+                ]),
                 html.Label("Veuillez choisir la variable à afficher sur l'histogramme : distance (en miles), le montant ($), ou le pourboire ($)",
                            style={
                                "fontWeight":"bold",
