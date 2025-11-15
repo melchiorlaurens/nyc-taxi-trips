@@ -256,9 +256,32 @@ Tests are located in the [tests/](tests/) directory and are primarily for develo
 
 ## Analysis Report
 
-[Your analysis findings will go here]
+Data analysis for months 01/2025 to 09/2025:
 
+Map Analysis
+
+The analysis of the map shows that data doesn't significantly vary for each chosen month.
+In a given month:
+- Most pickups happen at JFK Airport and in the center of Manhattan (100k+ pickups)
+- In Brooklyn, Queens and The Bronx, few hundreds to few thousands pickups happen
+- In Staten Island, only dozens of pickups happen
+- Average trip distance is in single digits for all boroughs except Staten Island, which has some trips over 10 miles (note the few samples for one month for Staten Island)
+- People tip way less in Queens (<$0.3) that in Manhattan $2)
+
+Histogram Analysis:
+
+In a given month:
+- Most trips (>500k) are approx. 1 mile long
+- Proportion of trips falls down exponentially to ~ 20k trips of 10 miles
+- A lot of trips are outliers, for example, hundreds of trips are longer than 50 miles
+
+Box Plot Analysis:
+
+For trip distance and fare amount, Queens comes first with about double the median value of Bronx and Queens, and Staten Island has its median being the middle of Bronx/Brooklyn and Queens. Manhattan has less than half the average value of Bronx and Brooklyn for its average trip distance and fare amount.
+
+People in Staten Island tip more than in other boroughs, and the values vary a lot between months; that can be explained with the low number of trips in Staten Island.
 ---
+
 
 ## Copyright and Attribution
 
