@@ -260,21 +260,13 @@ def make_hist_figure(
 def make_box_figure(
     df: pd.DataFrame,
     col: str,
-    xmin_filter: Optional[float] = None,
-    xmax_filter: Optional[float] = None,
-    scale_type: str = "log",
     display_label: Optional[str] = None,
     group_col: Optional[str] = None,
     max_groups: int = 6,
     exclude_groups: Optional[Iterable[str]] = ("Unknown",),
     y_order: Optional[Iterable[str]] = None,
 ):
-    """Box plot pour la même variable que l'histogramme.
-
-    - Applique les mêmes filtres xmin/xmax.
-    - Utilise un axe en log si demandé.
-    - Affiche la variable en horizontal (x) pour rester cohérent avec l'histogramme.
-    """
+    """Box plot statique (axe X en log) pour la même variable que l'histogramme."""
     if col not in df.columns:
         return px.box()
 
@@ -283,27 +275,11 @@ def make_box_figure(
     if s.empty:
         return px.box()
 
-    # Filtres
-    slider_min = float(xmin_filter) if xmin_filter is not None else None
-    slider_max = float(xmax_filter) if xmax_filter is not None else None
-    if scale_type == "log" and slider_min is not None:
-        slider_min = max(slider_min, 1e-12)
-
-    s_filtered = s.copy()
-    if slider_min is not None:
-        s_filtered = s_filtered[s_filtered >= slider_min]
-    if slider_max is not None:
-        s_filtered = s_filtered[s_filtered <= slider_max]
-
     label_txt = display_label if display_label else col
 
     # Prépare DataFrame filtré (avec éventuelle colonne de groupe)
     df_plot = df.copy()
     df_plot[col] = s  # valeurs nettoyées
-    if slider_min is not None:
-        df_plot = df_plot[df_plot[col] >= slider_min]
-    if slider_max is not None:
-        df_plot = df_plot[df_plot[col] <= slider_max]
 
     # Si aucune ligne après filtre, créer figure vide
     if df_plot.empty:
@@ -418,47 +394,20 @@ def make_box_figure(
             showlegend=False,
         ))
 
-    # Bornes d'axe X (valeurs) — suive le slider s'il est fourni
-    data_min = float(df_plot[col].min())
+    # Bornes d'axe X (valeurs) — statique en log
+    data_min = max(float(df_plot[col].min()), 1e-12)
     data_max = float(df_plot[col].max())
-    x_lo = xmin_filter if xmin_filter is not None else data_min
-    x_hi = xmax_filter if xmax_filter is not None else data_max
-    if scale_type == "log":
-        x_lo = max(x_lo, 1e-12)
-        if x_hi is None or x_hi <= x_lo:
-            x_hi = max(data_max, x_lo * (1 + 1e-9))
-        tick_lo = int(np.floor(np.log10(x_lo)))
-        tick_hi = int(np.ceil(np.log10(x_hi)))
-        tickvals = [10**k for k in range(tick_lo, tick_hi + 1)]
-        ticktext = [
-            (f"{int(v):,}".replace(",", " ") if v >= 1000 else (f"{v:.0f}" if v >= 1 else f"{v:.3g}"))
-            for v in tickvals
-        ]
-        fig.update_xaxes(
-            type="log",
-            title=label_txt + " (échelle log)",
-            range=[np.log10(x_lo), np.log10(x_hi)],
-            tickmode="array",
-            tickvals=tickvals,
-            ticktext=ticktext,
-        )
-    else:
-        if x_hi is None or x_hi <= x_lo:
-            x_hi = max(data_max, x_lo + 1e-9)
-        # 6 ticks uniformes avec formatage lisible
-        ticks = np.linspace(x_lo, x_hi, num=6)
-        ticktext = [
-            (f"{int(v):,}".replace(",", " ") if v >= 1000 else (f"{v:.0f}" if v >= 1 else f"{v:.3g}"))
-            for v in ticks
-        ]
-        fig.update_xaxes(
-            type="linear",
-            title=label_txt + " (échelle linéaire)",
-            range=[x_lo, x_hi],
-            tickmode="array",
-            tickvals=ticks,
-            ticktext=ticktext,
-        )
+    x_lo = data_min
+    x_hi = max(data_max, x_lo * (1 + 1e-9))
+    tickvals, ticktext = _log_ticks(x_lo, x_hi)
+    fig.update_xaxes(
+        type="log",
+        title=label_txt + " (échelle log)",
+        range=[np.log10(x_lo), np.log10(x_hi)],
+        tickmode="array",
+        tickvals=tickvals,
+        ticktext=ticktext,
+    )
 
     fig.update_layout(
         margin=dict(l=10, r=10, t=60, b=10),

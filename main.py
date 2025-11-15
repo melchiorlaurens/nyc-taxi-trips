@@ -522,9 +522,6 @@ def build_app():
         fig = make_box_figure(
             df_month,
             col,
-            None,
-            None,
-            "log",
             display_label=display_label,
             group_col="borough",
             max_groups=len(fixed_order),
