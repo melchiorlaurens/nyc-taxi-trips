@@ -20,7 +20,7 @@ def sync_sqlite_database(parquet_paths: Iterable[Path], db_path: Optional[Path] 
     db_path = Path(db_path or SQLITE_DB_PATH)
     parquet_list: List[Path] = [Path(p) for p in parquet_paths if Path(p).exists()]
     if not parquet_list:
-        raise FileNotFoundError("Aucun parquet trouvé pour alimenter la base SQLite.")
+        raise FileNotFoundError("No parquet files found to populate the SQLite database.")
 
     DATABASE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -54,7 +54,7 @@ def read_month_from_sqlite(
     """Return a DataFrame for a given (year, month) pulled from SQLite."""
     db_path = Path(db_path or SQLITE_DB_PATH)
     if not db_path.exists():
-        raise FileNotFoundError(f"Base SQLite introuvable : {db_path}")
+        raise FileNotFoundError(f"SQLite database not found: {db_path}")
 
     month_str = f"{month:02d}"
     column_clause = "*"

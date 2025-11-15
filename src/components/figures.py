@@ -186,7 +186,7 @@ def make_hist_figure(
 
         fig.update_xaxes(
             type="log",
-            title=label_txt + " (échelle log)",
+            title=label_txt + " (log scale)",
             tickmode="array",
             tickvals=tickvals,
             ticktext=ticktext,
@@ -226,7 +226,7 @@ def make_hist_figure(
 
         fig.update_xaxes(
             type="linear",
-            title=label_txt + " (échelle linéaire)",
+            title=label_txt + " (linear scale)",
             ticks="outside",
             ticklen=6,
             tickwidth=1,
@@ -251,7 +251,7 @@ def make_hist_figure(
         margin=dict(l=10, r=10, t=60, b=10),
         bargap=BARGAP,
         bargroupgap=0,
-        title=f"Répartition du nombre de trajets en fonction de {label_txt} sous forme d'histogramme",
+        title=f"Distribution of trips by {label_txt}",
         template="plotly_dark",
         paper_bgcolor="rgba(0,0,0,0)"
     )
@@ -353,7 +353,7 @@ def make_box_figure(
             )
             empty.add_annotation(
                 x=0.5, y=0.5, xref="paper", yref="paper",
-                text="Aucune catégorie disponible",
+                text="No category available",
                 showarrow=False,
                 font=dict(size=13, color="#e5e7eb"),
                 bgcolor="rgba(17,24,39,0.55)",
@@ -403,7 +403,7 @@ def make_box_figure(
     tickvals, ticktext = _log_ticks(x_lo, x_hi)
     fig.update_xaxes(
         type="log",
-        title=label_txt + " (échelle log)",
+        title=label_txt + " (log scale)",
         range=[np.log10(x_lo), np.log10(x_hi)],
         tickmode="array",
         tickvals=tickvals,

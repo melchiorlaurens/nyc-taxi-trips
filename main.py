@@ -73,7 +73,7 @@ def build_app():
     monthly_paths = sorted(CLEAN_YELLOW_MONTHLY_DIR.glob("yellow_clean_*.parquet"))
     months_all = sorted({p.name.replace(".parquet", "").split("_")[-1] for p in monthly_paths})
     configured = [f"{y}-{m:02d}" for y, m in DEFAULT_PERIODS]
-    months = [m for m in months_all if m in configured] or months_all or ["(indéfini)"]
+    months = [m for m in months_all if m in configured] or months_all or ["(undefined)"]
 
     # Read a monthly file to determine available columns
     if monthly_paths:
@@ -210,7 +210,7 @@ def build_app():
                         "color":"#f3f4f6",
                         }
                     ),
-            html.Div("Exécution : python main.py",
+            html.Div("Run: python main.py",
                      style={
                          
                          "textAlign":"center",
@@ -218,11 +218,11 @@ def build_app():
                          "fontSize":"14px"
                          }
                     ),
-            # Présentation générale — à éditer
+            # Overview text — edit below
             html.Div([
-                html.H2("Contexte", style={"margin":"20px 0 0 0"}),
+                html.H2("Context", style={"margin":"20px 0 0 0"}),
                 html.P([
-                    "Ce dashboard explore l’activité des taxis jaunes de New York (Yellow Taxi) à partir des enregistrements mensuels publiés par la ",
+                    "This dashboard explores New York City yellow taxi activity using the monthly trip records published by the ",
                     html.A("NYC Taxi & Limousine Commission (TLC)",
                            href="https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page",
                            target="_blank",
@@ -230,17 +230,19 @@ def build_app():
                            style={"textDecoration": "underline",
                                   "color": "#2563eb"
                                   }),
-                    ". "
-                    "Chaque trajet comprend au moins une zone de prise en charge et de dépose (TLC zones), une distance en miles, un montant payé en dollars et, le cas échéant, un pourboire. ",
+                    ". Each trip contains at least a pickup and drop-off TLC zone, the distance in miles, the fare in dollars and, "
+                    "when applicable, the tip.",
                 ],
                     style={"marginBottom":"8px"}
                 ),
                 html.P(
-                    "L’objectif est de proposer une lecture à la fois spatiale et statistique : où l’activité se concentre dans la ville et comment se répartissent les distances, montants et pourboires. "
-                    "Le slider en bas de page permet de sélectionner un mois entre janvier et septembre 2025 inclus. "
+                    "The objective is to give both a spatial and statistical overview: where activity concentrates across the city and "
+                    "how distances, fares and tips are distributed. Use the month slider at the bottom to focus on any month between "
+                    "January and September 2025.",
                 ),
                 html.P(
-                    "Lors de l'exécution avec 'python main.py', les données sont récupérés depuis le site souce, nettoyées et préparées automatiquement au premier lancement du script (voir le code source pour plus de détails). "
+                    "When running `python main.py`, the raw files are downloaded from the TLC source, cleaned and prepared automatically "
+                    "the first time the script is executed (see the source code for details)."
                 )
             ], style={
                 "maxWidth":"920px",
@@ -251,20 +253,20 @@ def build_app():
 
             html.Div(style={"height":"60px"}),
 
-            # Carte
+            # Map
             html.Div([
                 html.Div([
-                    html.H3("Carte choroplèthe", style={"textAlign":"center",
+                    html.H3("Choropleth map", style={"textAlign":"center",
                                                           "fontSize":"22px"
                                                           }),
                     html.P(
-                        "La carte choroplèthe représente les zones TLC colorées selon une métrique que vous choisissez dans le menu dédié : nombre de prises en charge (pickups), distance moyenne, montant moyen ou pourboire moyen. "
+                        "Pick a metric to color the TLC pickup zones: number of pickups, average trip distance, average fare amount or average tip amount.",
                     ),
                     html.P(
-                        "Vous pouvez limiter l’affichage à un ou plusieurs boroughs pour focaliser l’analyse sur un territoire."
+                        "Use the borough checklist to limit the display to specific areas.",
                         ),
                     html.P(
-                        "En survolant une zone, une infobulle indique son nom, son identifiant et la valeur exacte de la métrique. ",
+                        "Hovering a zone reveals its name, borough and the exact metric value.",
                     )
                 ], style={"maxWidth":"900px",
                           "margin":"0 auto 40px",
@@ -273,7 +275,7 @@ def build_app():
                           }
                 ),
                 html.Div([
-                    html.Label("Métrique (carte)",
+                    html.Label("Metric (map)",
                                style={
                                    "fontWeight":"bold",
                                    "marginBottom":"6px"
@@ -285,9 +287,9 @@ def build_app():
                                  style={"width":"320px"},
                                  options=(
                                      [{"label":"Pickups (count)","value":"count"}] +
-                                     ([{"label":"Distance moyenne (mi)","value":"trip_distance"}] if "trip_distance" in cols_available else []) +
-                                     ([{"label":"Montant moyen ($)","value":"fare_amount"}] if "fare_amount" in cols_available else []) +
-                                     ([{"label":"Pourboire moyen ($)","value":"tip_amount"}] if "tip_amount" in cols_available else [])
+                                     ([{"label":"Average distance (mi)","value":"trip_distance"}] if "trip_distance" in cols_available else []) +
+                                     ([{"label":"Average fare ($)","value":"fare_amount"}] if "fare_amount" in cols_available else []) +
+                                     ([{"label":"Average tip ($)","value":"tip_amount"}] if "tip_amount" in cols_available else [])
                                  )
                                  ),
                     ], 
@@ -302,7 +304,7 @@ def build_app():
                     ),
                 
                 html.Div([
-                    html.Label("Arrondissements de New York :"),
+                    html.Label("New York boroughs :"),
                     dcc.Checklist(id="borough-filter",
                                   options=[{"label":b,"value":b} for b in boroughs],
                                   value=boroughs, inline=True)
@@ -322,19 +324,18 @@ def build_app():
 
             html.Div(style={"height":"120px"}),
 
-            # Histogramme
+            # Histogram
             html.Div([
                 html.Div([
-                    html.H3("Histogramme et box plot", style={"textAlign":"center",
+                    html.H3("Histogram and box plot", style={"textAlign":"center",
                                                               "fontSize":"22px"
                                                               }),
                     html.P(
-                        "L’histogramme montre la répartition globale de la variable continue sélectionnée (distance, montant ou pourboire). "
-                        "Grâce au slider de l'échelle X juste en dessous, l’axe des abscisses peut être affiché soit en échelle logarithmique, soit en échelle linéaire. De plus, le slider permet de sélectionner une plage de valeurs personnalisée de la variable pour avoir plus de détails (effet de zoom). "
-                        "Les valeurs affichées restent en unités réelles (miles ou dollars). "
+                        "The histogram displays the overall distribution of the selected continuous variable (distance, fare or tip). "
+                        "Use the slider right underneath to adjust the X-axis range: it works in log space and acts as a zoom into the values of interest."
                     ),
                     html.P(
-                        "Le box plot, qui est en revanche insensible au slider, complète cette vue en résumant la distribution de la variable par sa médiane, ses quartiles et ses valeurs maximum et minimum. "
+                        "The box plot, which is deliberately static, complements the histogram by summarizing the distribution per borough using min, max, median and quartiles."
                         ),
                 ], style={"maxWidth":"900px",
                           "margin":"0 auto 40px",
@@ -342,7 +343,7 @@ def build_app():
                           "textAlign":"center"
                           }
                 ),
-                html.Label("Veuillez choisir la variable à afficher sur l'histogramme : distance (en miles), le montant ($), ou le pourboire ($)",
+                html.Label("Select the variable to display: trip distance (mi), fare ($), or tip ($)",
                            style={
                                "fontWeight":"bold",
                                "marginBottom":"6px"
@@ -350,10 +351,10 @@ def build_app():
                            ),
                 dcc.Dropdown(id="hist-col",
                              options=(
-                                 ([{"label":"Distance moyenne (mi)","value":"trip_distance"}] if "trip_distance" in numeric_hist_cols else []) +
-                                 ([{"label":"Montant moyen ($)","value":"fare_amount"}] if "fare_amount" in numeric_hist_cols else []) +
-                                 ([{"label":"Pourboire moyen ($)","value":"tip_amount"}] if "tip_amount" in numeric_hist_cols else [])
-                             ) or [{"label":"(aucune)","value":"_none"}],
+                                 ([{"label":"Average distance (mi)","value":"trip_distance"}] if "trip_distance" in numeric_hist_cols else []) +
+                                 ([{"label":"Average fare ($)","value":"fare_amount"}] if "fare_amount" in numeric_hist_cols else []) +
+                                 ([{"label":"Average tip ($)","value":"tip_amount"}] if "tip_amount" in numeric_hist_cols else [])
+                             ) or [{"label":"(none)","value":"_none"}],
                              value=("trip_distance" if "trip_distance" in numeric_hist_cols else (numeric_hist_cols[0] if numeric_hist_cols else "_none")),
                              clearable=False,
                              style={"width":"320px"}
@@ -372,11 +373,11 @@ def build_app():
             # Scale controls for histogram
             html.Div([
                 html.Div([
-                    html.Label("Échelle de l'axe X"),
+                    html.Label("X-axis scale"),
                     dcc.RadioItems(
                         id="hist-scale-type",
-                        options=[{"label": "Logarithmique", "value": "log"},
-                                 {"label": "Linéaire", "value": "linear"}
+                        options=[{"label": "Logarithmic", "value": "log"},
+                                 {"label": "Linear", "value": "linear"}
                                  ],
                         value="log",
                         inline=True
@@ -388,7 +389,9 @@ def build_app():
                     }
                 ),
                 html.Div([
-                    html.Label("X axis range (min-max) - slider in log scale", style={"textAlign":"center"}),
+                    html.Label(
+                        "X axis range (min-max) - slider in log scale"
+                    ),
                     dcc.RangeSlider(id="hist-range-slider",
                                     min=0,
                                     max=2,
@@ -417,7 +420,7 @@ def build_app():
                           }
                       ),
 
-            # Box plot — même variable et filtres que l'histogramme
+            # Box plot — same metric (static view, not linked to the slider)
             dcc.Graph(id="box",
                       style={
                           "height":"60vh",
@@ -425,7 +428,7 @@ def build_app():
                           }
                       ),
 
-            html.Div(style={"height":"60px"}), # permet de décaler le contenu au-dessus du slider fixe
+            html.Div(style={"height":"60px"}),  # spacer so content stays above the fixed slider
 
             # Overlay fixe pour garder le slider visible pendant le scroll
             html.Div([
@@ -531,9 +534,9 @@ def build_app():
 
     # Readable labels for histogram
     hist_label_for = {
-        "trip_distance": "Distance moyenne (mi)",
-        "fare_amount": "Montant moyen ($)",
-        "tip_amount": "Pourboire moyen ($)",
+        "trip_distance": "Average distance (mi)",
+        "fare_amount": "Average fare ($)",
+        "tip_amount": "Average tip ($)",
     }
 
     @app.callback(Output("hist","figure"),
